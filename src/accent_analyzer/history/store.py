@@ -11,10 +11,10 @@ import json
 import math
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2 adds the drills table (created in place on open)
 COLUMNS = (
     "hrt_rate", "fall_rate", "mean_f0", "std_f0", "range_ratio",
     "voiced_ratio", "high_onset_rate", "low_onset_rate", "n_phrase_ends",
@@ -37,6 +37,13 @@ CREATE TABLE IF NOT EXISTS recordings (
 );
 CREATE INDEX IF NOT EXISTS recordings_time ON recordings (recorded_at);
 CREATE INDEX IF NOT EXISTS recordings_session ON recordings (session, take);
+CREATE TABLE IF NOT EXISTS drills (
+    day TEXT PRIMARY KEY,           -- YYYY-MM-DD; one completed routine per day
+    completed_at TEXT NOT NULL,
+    level TEXT,
+    minutes REAL,
+    recording_id INTEGER
+);
 """
 
 
@@ -213,6 +220,17 @@ class HistoryStore:
              **{k: r.get(k) for k in keys}}
             for r in records
         ]
+
+    def log_drill(self, day: date, level: str | None = None, minutes: float | None = None,
+                  recording_id: int | None = None) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO drills (day, completed_at, level, minutes, recording_id) VALUES (?, ?, ?, ?, ?)",
+            (day.isoformat(), datetime.now().isoformat(timespec="seconds"), level, minutes, recording_id),
+        )
+        self._conn.commit()
+
+    def drill_days(self) -> set[date]:
+        return {date.fromisoformat(r[0]) for r in self._conn.execute("SELECT day FROM drills")}
 
     def delete(self, record_id: int) -> bool:
         cur = self._conn.execute("DELETE FROM recordings WHERE id = ?", (record_id,))

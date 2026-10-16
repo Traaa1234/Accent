@@ -326,6 +326,118 @@ def dashboard(history_path: str | None, output: str, open_browser: bool) -> None
         webbrowser.open(written.resolve().as_uri())
 
 
+def _analyze_or_fail(path: str, f0_min: float, f0_max: float):
+    try:
+        return analyze_file(path, f0_min=f0_min, f0_max=f0_max)
+    except (AudioLoadError, ValueError) as exc:
+        raise click.ClickException(f"{path}: {exc}") from exc
+
+
+@cli.command()
+@click.option("--reference", "-r", required=True, type=click.Path(exists=True, dir_okay=False),
+              help="Native-speaker clip you are copying.")
+@click.option("--user", "-u", "user_path", required=True, type=click.Path(exists=True, dir_okay=False),
+              help="Your recording of the same words.")
+@click.option("--f0-min", type=float, default=DEFAULT_F0_MIN, show_default=True, help="Your voice range (min).")
+@click.option("--f0-max", type=float, default=DEFAULT_F0_MAX, show_default=True, help="Your voice range (max).")
+@click.option("--json", "as_json", is_flag=True)
+def shadow(reference: str, user_path: str, f0_min: float, f0_max: float, as_json: bool) -> None:
+    """Shadowing: how closely your intonation follows a reference clip."""
+    from accent_analyzer.analysis.compare import REFERENCE_F0, shadow as shadow_score
+
+    ref = _analyze_or_fail(reference, *REFERENCE_F0)
+    you = _analyze_or_fail(user_path, f0_min, f0_max)
+    try:
+        r = shadow_score(ref, you)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if as_json:
+        click.echo(json.dumps(_json_safe(r.to_dict()), indent=2))
+        return
+    click.echo(f"Shadowing score: {r.score:.0f}/100")
+    click.echo(f"  Contour match   {r.contour_match:.0f}/100   (shape of your pitch vs the reference)")
+    click.echo(f"  Range match     {r.range_match:.0f}/100   (you {r.user_span:.1f} vs reference {r.ref_span:.1f} semitones)")
+    if r.ending_agreement is not None:
+        click.echo(f"  Phrase endings  {r.ending_agreement:.0%} in the same direction as the reference")
+    for c in r.endings:
+        you_txt = f"you {c.user_direction} ({c.user_semitones:+.1f} st)" if c.user_direction else "no matching ending"
+        mark = "✓" if c.agrees else "✗"
+        click.echo(f"    {mark} {c.ref_time:5.1f}s  reference {c.ref_direction} ({c.ref_semitones:+.1f} st), {you_txt}")
+    click.echo("\nTips")
+    for t in r.tips:
+        click.echo(f"  - {t}")
+
+
+@cli.command()
+@click.argument("take_a", type=click.Path(exists=True, dir_okay=False))
+@click.argument("take_b", type=click.Path(exists=True, dir_okay=False))
+@click.option("--f0-min", type=float, default=DEFAULT_F0_MIN, show_default=True)
+@click.option("--f0-max", type=float, default=DEFAULT_F0_MAX, show_default=True)
+@click.option("--json", "as_json", is_flag=True)
+def compare(take_a: str, take_b: str, f0_min: float, f0_max: float, as_json: bool) -> None:
+    """A/B contrast: which of two takes of the same sentence sounds more American."""
+    from accent_analyzer.analysis.compare import compare_takes
+
+    r = compare_takes(_analyze_or_fail(take_a, f0_min, f0_max), _analyze_or_fail(take_b, f0_min, f0_max))
+    if as_json:
+        click.echo(json.dumps(_json_safe(r.to_dict()), indent=2))
+        return
+    verdict = f"Take {r.winner} sounds more American." if r.winner else "Too close to call."
+    click.echo(f"{verdict}  (A {r.a.score:.2f} vs B {r.b.score:.2f})")
+    for line in r.reasons:
+        click.echo(f"  - {line}")
+
+
+@cli.command()
+@click.option("--day", type=click.Choice(["today", "monday", "tuesday", "wednesday", "thursday", "friday",
+                                          "saturday", "sunday"], case_sensitive=False), default="today",
+              show_default=True, help="Which day's routine (this week).")
+@click.option("--level", type=click.Choice(["beginner", "intermediate", "advanced"]), default="intermediate",
+              show_default=True)
+@HISTORY_OPTION
+@ACCENT_OPTION
+@click.option("--done", is_flag=True, help="Mark this day's routine as completed (needs --history).")
+@click.option("--json", "as_json", is_flag=True)
+def drill(day: str, level: str, history_path: str | None, accent: str | None, done: bool, as_json: bool) -> None:
+    """The 5-minute daily drill routine, with your streak and weekly summary."""
+    from datetime import date
+
+    from accent_analyzer.coaching.routine import build_routine, date_for_weekday, weekly_summary
+
+    the_day = date.today() if day.lower() == "today" else date_for_weekday(day)
+    records, drill_days = [], set()
+    if history_path:
+        with HistoryStore(history_path) as store:
+            if done:
+                store.log_drill(the_day, level=level, minutes=5)
+            records, drill_days = store.all(), store.drill_days()
+    elif done:
+        raise click.UsageError("--done needs --history (or ACCENT_HISTORY) to remember your streak.")
+    latest = records[-1] if records else None
+    accent = accent or next((r.accent for r in reversed(records) if r.accent), None)
+    routine = build_routine(the_day, level, {k: latest.get(k) for k in latest.metrics} if latest else None, accent)
+    summary = weekly_summary(records, drill_days) if history_path else None
+    if as_json:
+        click.echo(json.dumps(_json_safe({"routine": routine, "week": summary}), indent=2))
+        return
+    click.echo(f"{routine['weekday']} routine · {routine['level']} · {routine['minutes']:.0f} minutes")
+    click.echo(f"Focus: {routine['focus']['name']} ({routine['focus']['reason']})")
+    click.echo(f"{routine['note']}\n")
+    for i, step in enumerate(routine["steps"], start=1):
+        click.echo(f"{i}. {step['title']}  ({step['minutes']:g} min)")
+        for line in step["steps"]:
+            click.echo(f"     {line}")
+        if step.get("items"):
+            click.echo("     " + (", ".join(step["items"]) if step["id"] == "words" else " | ".join(step["items"])))
+    if summary:
+        click.echo(f"\nStreak: {summary['streak']} day{'s' if summary['streak'] != 1 else ''}"
+                   + ("  ✓ done for this day" if the_day in drill_days else ""))
+        click.echo("Week:   " + "  ".join(f"{d['weekday']}{'●' if d['drill'] else '·'}" for d in summary["days"]))
+        click.echo(summary["headline"])
+    if done:
+        click.echo("Marked as done. Nice work.")
+
+
 @cli.command()
 @click.option("--port", type=int, default=8765, show_default=True, help="Port on 127.0.0.1 (next free one if taken).")
 @click.option("--data-dir", type=click.Path(file_okay=False), help="Where recordings and settings are kept "

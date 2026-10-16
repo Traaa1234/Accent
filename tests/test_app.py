@@ -71,7 +71,7 @@ def test_writes_need_app_header(client):
 def test_state_defaults(client):
     s = client.get("/api/state").get_json()
     assert s["count"] == 0 and s["latest_id"] is None
-    assert s["settings"] == {"accent": None, "voice": "medium", "pitch_method": "autocorr"}
+    assert s["settings"] == {"accent": None, "voice": "medium", "pitch_method": "autocorr", "level": "intermediate"}
     assert {a["id"] for a in s["accents"]} == {"nze", "aue", "british", "indian", "other"}
     assert next(a for a in s["accents"] if a["id"] == "other")["name"] == "Other"
 
@@ -81,7 +81,7 @@ def test_settings_validate_and_persist(app, client):
     assert client.put("/api/settings", headers=H, json={"voice": "falsetto"}).status_code == 400
     assert client.put("/api/settings", headers=H, json={"pitch_method": "crepe"}).status_code == 400
     r = client.put("/api/settings", headers=H, json={"accent": "nze", "voice": "low", "pitch_method": "yin"})
-    assert r.get_json() == {"accent": "nze", "voice": "low", "pitch_method": "yin"}
+    assert r.get_json() == {"accent": "nze", "voice": "low", "pitch_method": "yin", "level": "intermediate"}
     fresh = create_app(app.config["PATHS"].data, app.config["PATHS"].history).test_client()
     assert fresh.get("/api/settings").get_json()["voice"] == "low"
 
@@ -235,3 +235,95 @@ def test_second_launch_reuses_running_instance(app):
         server.shutdown()
         server.server_close()
     assert not running_instance(port)
+
+
+# --- practice: references, shadowing, A/B, routine --------------------------------
+
+@pytest.fixture(scope="module")
+def sentence_wavs():
+    return {k: wav_bytes(v) for k, v in synth.sentence_takes().items()}
+
+
+def add_reference(client, data, name="Anchor"):
+    return client.post("/api/references", headers=H, content_type="multipart/form-data",
+                       data={"audio": (io.BytesIO(data), "anchor.wav"), "name": name})
+
+
+def test_reference_library(client, sentence_wavs):
+    assert client.get("/api/references").get_json() == []
+    r = add_reference(client, sentence_wavs["ref"])
+    assert r.status_code == 201
+    ref = r.get_json()
+    assert ref["name"] == "Anchor" and ref["duration"] > 9 and ref["warning"] is None
+    assert [x["id"] for x in client.get("/api/references").get_json()] == [ref["id"]]
+    assert client.get(f"/api/references/{ref['id']}/audio").mimetype == "audio/wav"
+    assert client.delete(f"/api/references/{ref['id']}", headers=H).status_code == 200
+    assert client.get("/api/references").get_json() == []
+    assert client.get(f"/api/references/{ref['id']}/audio").status_code == 404
+
+
+def test_reference_rejects_bad_audio_and_ids(app, client):
+    r = client.post("/api/references", headers=H, content_type="multipart/form-data",
+                    data={"audio": (io.BytesIO(b"junk"), "x.wav")})
+    assert r.status_code == 400
+    assert not list(app.config["PATHS"].references.glob("*.wav"))  # cleaned up
+    for bad in ("../settings", "abc", "0" * 31 + "g"):
+        assert client.get(f"/api/references/{bad}/audio").status_code == 404
+
+
+def test_shadow_endpoint(client, sentence_wavs):
+    ref_id = add_reference(client, sentence_wavs["ref"]).get_json()["id"]
+    r = client.post("/api/shadow", headers=H, content_type="multipart/form-data",
+                    data={"reference": ref_id, "audio": (io.BytesIO(sentence_wavs["same"]), "take.wav")})
+    assert r.status_code == 200, r.get_json()
+    data = r.get_json()
+    assert data["score"] >= 85 and data["ending_agreement"] == 1.0
+    assert client.get(data["take_audio"]).status_code == 200
+    missing = client.post("/api/shadow", headers=H, content_type="multipart/form-data",
+                          data={"reference": "nope", "audio": (io.BytesIO(sentence_wavs["same"]), "take.wav")})
+    assert missing.status_code == 400 and "reference" in missing.get_json()["error"]
+
+
+def test_ab_endpoint(client, sentence_wavs):
+    r = client.post("/api/ab", headers=H, content_type="multipart/form-data",
+                    data={"audio_a": (io.BytesIO(sentence_wavs["flipped"]), "a.wav"),
+                          "audio_b": (io.BytesIO(sentence_wavs["same"]), "b.wav")})
+    assert r.status_code == 200, r.get_json()
+    data = r.get_json()
+    assert data["winner"] == "B" and data["reasons"][0].startswith("Take B ends falling")
+    assert client.get(data["audio_a"]).status_code == 200
+    one = client.post("/api/ab", headers=H, content_type="multipart/form-data",
+                      data={"audio_a": (io.BytesIO(sentence_wavs["same"]), "a.wav")})
+    assert one.status_code == 400
+
+
+def test_practice_audio_paths_are_locked_down(client):
+    for bad in ("..%2Fsettings.json", "settings.json", "a" * 32 + ".wav/../x"):
+        assert client.get(f"/api/practice/{bad}").status_code == 404
+
+
+def test_practice_files_are_pruned(app, client, sentence_wavs, monkeypatch):
+    import accent_analyzer.app.server as server
+    monkeypatch.setattr(server, "KEEP_PRACTICE_FILES", 2)
+    for _ in range(2):
+        client.post("/api/ab", headers=H, content_type="multipart/form-data",
+                    data={"audio_a": (io.BytesIO(sentence_wavs["same"]), "a.wav"),
+                          "audio_b": (io.BytesIO(sentence_wavs["same"]), "b.wav")})
+    assert len(list(app.config["PATHS"].practice.iterdir())) == 2
+
+
+def test_routine_endpoints(client, nze_wav):
+    data = client.get("/api/routine").get_json()
+    assert data["routine"]["minutes"] == 5 and data["done_today"] is False
+    assert data["week"]["streak"] == 0
+    assert isinstance(next(s for s in data["routine"]["steps"] if s["id"] == "record")["passage_index"], int)
+    assert client.put("/api/settings", headers=H, json={"level": "expert"}).status_code == 400
+    client.put("/api/settings", headers=H, json={"level": "beginner"})
+    assert client.get("/api/routine").get_json()["routine"]["level"] == "beginner"
+    assert client.get("/api/routine?level=advanced").get_json()["routine"]["level"] == "advanced"
+    rid = upload(client, nze_wav).get_json()["id"]
+    assert client.post("/api/routine/done", json={"recording_id": rid}).status_code == 403  # needs header
+    done = client.post("/api/routine/done", headers=H, json={"recording_id": rid}).get_json()
+    assert done == {"done": True, "streak": 1}
+    after = client.get("/api/routine").get_json()
+    assert after["done_today"] and after["routine"]["focus"]["id"] == "hrt"

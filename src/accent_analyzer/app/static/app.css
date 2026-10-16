@@ -3,7 +3,7 @@
   --page: #f9f9f7; --surface: #fcfcfb; --raised: #ffffff; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
   --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --hover: rgba(11,11,11,0.05);
   --band: #eef4ee; --primary: #2a78d6; --primary-ink: #ffffff; --rec: #d03b3b;
-  --rise: #e34948; --fall: #2a78d6; --series: #2a78d6; --level: #898781;
+  --rise: #e34948; --fall: #2a78d6; --series: #2a78d6; --level: #898781; --best: #eb6834;
   --good: #006300; --good-bg: #e7f0e7; --warn: #8a5a00; --warn-bg: #fdf1d6; --bad: #b42d2d;
 }
 @media (prefers-color-scheme: dark) {
@@ -12,7 +12,7 @@
     --page: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
     --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.06);
     --band: #1c241c; --primary: #3987e5; --primary-ink: #ffffff; --rec: #e66767;
-    --rise: #e66767; --fall: #3987e5; --series: #3987e5; --level: #898781;
+    --rise: #e66767; --fall: #3987e5; --series: #3987e5; --level: #898781; --best: #d95926;
     --good: #0ca30c; --good-bg: #1f2e1f; --warn: #fab219; --warn-bg: #3a2f15; --bad: #e66767;
   }
 }
@@ -21,7 +21,7 @@
   --page: #0d0d0d; --surface: #1a1a19; --raised: #222220; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
   --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.06);
   --band: #1c241c; --primary: #3987e5; --primary-ink: #ffffff; --rec: #e66767;
-  --rise: #e66767; --fall: #3987e5; --series: #3987e5; --level: #898781;
+  --rise: #e66767; --fall: #3987e5; --series: #3987e5; --level: #898781; --best: #d95926;
   --good: #0ca30c; --good-bg: #1f2e1f; --warn: #fab219; --warn-bg: #3a2f15; --bad: #e66767;
 }
 
@@ -186,6 +186,33 @@ ul.sentences { margin: 4px 0; padding-left: 20px; color: var(--ink-2); }
 .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; margin: 14px 0 4px; }
 .reco { border-top: 1px solid var(--grid); padding-top: 12px; margin-top: 12px; }
 .reco:first-of-type { border-top: 0; margin-top: 4px; padding-top: 0; }
+
+/* ---- practice tabs, routine, mini recorder, overlays ---- */
+.seg a.segtab { font-size: 13.5px; color: var(--ink-2); padding: 7px 13px; text-decoration: none; }
+.seg a.segtab + a.segtab { border-left: 1px solid var(--border); }
+.seg a.segtab[aria-selected="true"] { color: var(--ink); background: var(--hover); font-weight: 600; }
+.btn.rec { color: var(--rec); font-weight: 600; }
+.btn.rec.on { background: var(--rec); color: #fff; border-color: transparent; }
+.tabnum { font-variant-numeric: tabular-nums; min-width: 3.5em; }
+.mini audio { margin-top: 6px; }
+.kpi.wide { grid-column: span 2; }
+.weekstrip { display: flex; gap: 6px; justify-content: space-between; max-width: 340px; margin: 8px 0 4px; }
+.weekstrip .day { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.weekstrip .dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--axis); }
+.weekstrip .done .dot, .weekkey .dot.done { background: var(--good); border-color: var(--good); }
+.weekstrip .rec .dot, .weekkey .dot.rec { background: linear-gradient(90deg, var(--good) 50%, transparent 50%); border-color: var(--good); }
+.weekkey { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.weekkey .dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--axis); display: inline-block; margin-left: 6px; }
+.weekkey .dot:first-child { margin-left: 0; }
+ol.routine { padding-left: 22px; margin: 8px 0 0; }
+ol.routine > li { margin-bottom: 14px; }
+.steprow { display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
+.steprow input { accent-color: var(--good); }
+ol.routine .steps { color: var(--ink-2); margin: 4px 0; padding-left: 18px; }
+.ovl { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ovl.ref { stroke: var(--best); } .ovl.you { stroke: var(--series); }
+.key { display: inline-block; width: 16px; height: 0; border-top: 2px solid; }
+.key.ref { border-color: var(--best); } .key.you { border-color: var(--series); }
 
 /* ---- settings ---- */
 .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 8px; }

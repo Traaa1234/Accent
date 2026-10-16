@@ -5,11 +5,9 @@ training toward a General American accent. It measures intonation (pitch registe
 range, phrase-final rises/falls, phrase onsets) and maps off-target metrics to
 coaching drills.
 
-**Status:** deliverables 1–6 done plus a local web app: audio pipeline, F0 extraction,
-register metrics, phrase-ending (HRT) and onset analysis, 3-second window movement,
-HTML/PDF reports, session history with progression warnings, coaching library and
-recommendations, interactive dashboard. Shadowing, A/B mode, the drill tracker and
-forced-alignment phonetics are planned next.
+**Status:** deliverables 1–6 done, plus a local web app with shadowing, A/B contrast
+and a daily drill tracker. Next on the roadmap: phonetic feature detection
+(T-flaps, dark /l/, rhoticity, vowels) via forced alignment.
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## Quick start: the app
@@ -27,7 +25,14 @@ accent-analyzer app                        # opens http://localhost:8765 in your
 * **Results**: verdict, key numbers, your pitch contour with every phrase ending;
   click a ▲/▼ to hear that phrase. Full HTML/PDF report and delete buttons.
 * **Progress**: the dashboard, always current.
-* **Practice**: coaching modules, recommended ones first, with "Record this drill".
+* **Practice**, in four tabs:
+  * **Today**: a 5-minute routine (warm-up, a focus drill from your weakest area,
+    10 rotating target words, a recorded passage), streak counter, 7-day strip and
+    weekly summary. Beginner / intermediate / advanced change the material, not the time.
+  * **Shadow**: add native-speaker clips (5–30 s), listen, record your copy. Scores
+    contour match, range match and phrase-ending agreement, with both pitch lines overlaid.
+  * **A/B contrast**: two takes of one sentence; which sounds more American, and why.
+  * **Modules**: the full coaching library, recommended ones first.
 * **Settings**: accent background, voice range, pitch tracker.
 
 Everything stays on your computer: the server only listens on 127.0.0.1, and
@@ -50,7 +55,17 @@ uv run accent-analyzer analyze recording.m4a --accent nze --history ~/.accent_hi
 uv run accent-analyzer coach --history ~/.accent_history.db --focus hrt -o plan.html
 uv run accent-analyzer dashboard --history ~/.accent_history.db --open
 uv run accent-analyzer analyze recording.m4a --pitch-method yin --f0-min 70 --f0-max 260
+uv run accent-analyzer shadow --reference clips/anchor.wav --user my_take.m4a
+uv run accent-analyzer compare take_a.m4a take_b.m4a
+uv run accent-analyzer drill --day monday --level intermediate --history ~/.accent_history.db --done
 ```
+
+**Shadowing and A/B** compare contours in semitones relative to each speaker's own
+median pitch (so a low voice copying a high one is judged on shape), after a 5-frame
+median filter removes octave glitches, aligned with DTW to absorb speaking-rate
+differences. Shadow score = 60% contour correlation + 20% range match + 20%
+phrase-ending agreement. A/B weighs the final ending (35%), share of falling endings
+(25%), range (20%) and phrase-onset height (20%).
 
 ## Pitch tracking
 

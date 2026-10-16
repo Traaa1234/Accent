@@ -14,11 +14,13 @@ src/accent_analyzer/
     windows.py         3-second sliding-window slope classification
     interpret.py       single-recording interpretation rules -> Findings
     pipeline.py        analyze_file() -> AnalysisResult (the object everything downstream reads)
+    compare.py         shadowing (you vs reference) and A/B (take vs take): semitones + DTW
   reports/             charts.py (matplotlib, light + dark), verdict.py (headline + scorecard),
                        html_report.py (self-contained HTML), pdf_report.py (reportlab)
   history/             store.py (SQLite, one row per recording), progression.py (multi-recording rules)
   coaching/            modules.toml (content + declarative triggers), library.py (loader/validation),
-                       engine.py (ranking), report.py (standalone coaching plan HTML)
+                       engine.py (ranking), report.py (standalone coaching plan HTML),
+                       routine.py (daily routine, streak, weekly summary), prompts.toml (passages)
   dashboard/           build.py (derived numbers: radar scores, best-ever, deflation runs),
                        template.html (self-contained page; vanilla JS draws SVG charts)
   app/                 server.py (Flask API, 127.0.0.1 only), payload.py (Results JSON),
@@ -48,7 +50,8 @@ re-run DSP.
    `AnalysisResult`; engine ranks triggered modules by distance from target.
 6. **Dashboard** — done. HRT/falls trajectory, mean-F0 bars, radar vs best-ever, sortable table.
 7. **App** — done. Record / Results / Progress / Practice / Settings in the browser.
-8. **Later**: shadowing (DTW-aligned contour correlation), A/B mode, daily drill tracker.
+8. **Shadowing, A/B contrast, daily drill tracker** — done (app tabs + CLI commands).
+9. **Later**: shadowing (DTW-aligned contour correlation), A/B mode, daily drill tracker.
 
 ## v2 phonetic features (not in v1)
 
@@ -110,6 +113,10 @@ detection.
   third-party page can't send cross-origin (CSRF). Uploads get server-chosen names.
 * **Stored recordings are re-analyzed with their own saved pitch settings**, so changing
   Settings only affects new takes.
+
+* **Practice takes stay out of the history** (shadow and A/B audio is kept, newest 40
+  files, for playback only), so drills don't skew your trajectory. Routine completions
+  live in a `drills` table (schema v2; v1 files upgrade in place on open).
 
 ## Known calibration risks
 

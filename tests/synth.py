@@ -152,3 +152,20 @@ def continuous_speech(seed: int = 4) -> np.ndarray:
     rng = np.random.default_rng(seed)
     specs = _phrases(rng, 25, (1.4, 1.8), (190, 210), (150, 165), 25, 0.4, (35, 60), (40, 70))
     return speech_like(specs, pause_range=(0.16, 0.18), seed=seed)
+
+
+def sentence_takes() -> dict[str, np.ndarray]:
+    """A reference 'sentence' plus three imitations, for shadowing and A/B tests.
+
+    same:     same intonation, lower voice (x0.62) and 15% slower
+    flipped:  same voice change, but every phrase ending reversed
+    monotone: almost flat pitch
+    """
+    ref = [PhraseSpec(2.4, 260, 180, -70, 50), PhraseSpec(2.0, 250, 190, -60, 40),
+           PhraseSpec(2.6, 270, 175, +50, 50), PhraseSpec(2.2, 255, 185, -75, 45)]
+    k = 0.62
+    same = [PhraseSpec(s.duration * 1.15, s.onset_hz * k, s.base_hz * k, s.final_delta * k, s.accent_hz * k) for s in ref]
+    flipped = [PhraseSpec(s.duration, s.onset_hz * k, s.base_hz * k, -s.final_delta * k, s.accent_hz * k) for s in ref]
+    mono = [PhraseSpec(s.duration, 150, 145, 8, 5) for s in ref]
+    return {name: speech_like(specs, (0.35, 0.45), seed=seed)
+            for seed, (name, specs) in enumerate([("ref", ref), ("same", same), ("flipped", flipped), ("monotone", mono)], 1)}

@@ -241,6 +241,11 @@ async function viewRecord() {
       const result = await api("/api/recordings", { method: "POST", form });
       state.lastResult = result;
       state.drill = null;
+      if (state.routineDay) {  // this take was the last step of today's routine
+        state.routineDay = false;
+        const done = await api("/api/routine/done", { method: "POST", json: { recording_id: result.id } });
+        toast(`Routine done · ${done.streak}-day streak`);
+      }
       await refreshState();
       location.hash = "#results/" + result.id;
     } catch (err) {
@@ -583,12 +588,375 @@ async function viewProgress() {
 }
 
 /* =====================================================================
-   PRACTICE
+   PRACTICE: Today · Shadow · A/B · Modules
    ===================================================================== */
-async function viewPractice(focus) {
+const PRACTICE_TABS = [["today", "Today"], ["shadow", "Shadow"], ["ab", "A/B contrast"], ["modules", "Modules"]];
+
+async function viewPractice(arg) {
+  const tabIds = PRACTICE_TABS.map(t => t[0]);
+  const tab = tabIds.includes(arg) ? arg : arg ? "modules" : "today";
+  const focus = tabIds.includes(arg) ? null : arg;  // "#practice/hrt" opens that module
+  const head = h("div", "row", view);
+  h("h1", "", head, "Practice");
+  h("span", "spacer", head);
+  const seg = h("div", "seg", head);
+  seg.setAttribute("role", "tablist");
+  for (const [id, label] of PRACTICE_TABS) {
+    const a = h("a", "", seg, label);
+    a.href = "#practice/" + id;
+    a.setAttribute("role", "tab");
+    a.setAttribute("aria-selected", String(id === tab));
+    a.className = "segtab";
+  }
+  const body = h("div", "", view);
+  if (tab === "today") await practiceToday(body);
+  else if (tab === "shadow") await practiceShadow(body);
+  else if (tab === "ab") await practiceAB(body);
+  else await practiceModules(body, focus);
+}
+
+/* ---------- compact recorder used by Shadow and A/B ---------- */
+function miniRecorder(parent, label, onBlob) {
+  const box = h("div", "mini", parent);
+  const row = h("div", "row", box);
+  const btn = button("● " + label, "rec", row);
+  const time = h("span", "muted small tabnum", row, "");
+  const pick = button("or upload", "", row);
+  const file = h("input", "", row); file.type = "file"; file.hidden = true;
+  file.accept = ".m4a,.mp3,.wav,.flac,.aac,.webm,.ogg,.mp4,audio/*";
+  const meter = h("div", "meter", box); const lvl = h("div", "", meter);
+  meter.setAttribute("aria-hidden", "true");
+  const status = h("p", "status small", box); status.setAttribute("aria-live", "polite");
+  const player = h("audio", "", box); player.controls = true; player.hidden = true;
+  let rec = null, stream = null, chunks = [], t0 = 0, tick = null, actx = null, raf = null;
+  const stop = () => {
+    clearInterval(tick); cancelAnimationFrame(raf);
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (actx) actx.close();
+    stream = actx = null; lvl.style.width = "0";
+  };
+  const done = (blob, name) => {
+    player.src = URL.createObjectURL(blob); player.hidden = false;
+    onBlob(blob, name);
+  };
+  btn.addEventListener("click", async () => {
+    if (rec && rec.state === "recording") { rec.stop(); return; }
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false } }); }
+    catch (err) { status.textContent = err.name === "NotAllowedError" ? "Microphone access was blocked." : "No microphone found."; status.classList.add("error"); return; }
+    const mime = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"].find(t => MediaRecorder.isTypeSupported(t)) || "";
+    rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    chunks = [];
+    rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      const secs = (performance.now() - t0) / 1000, type = rec.mimeType || "audio/webm";
+      stop(); btn.textContent = "● Record again"; btn.classList.remove("on");
+      if (secs < 1.5) { status.textContent = "Too short; try again."; status.classList.add("error"); return; }
+      status.textContent = `Recorded ${secs.toFixed(1)} s.`; status.classList.remove("error");
+      done(new Blob(chunks, { type }), "take" + (type.includes("ogg") ? ".ogg" : type.includes("mp4") ? ".mp4" : ".webm"));
+    };
+    rec.start(500); t0 = performance.now();
+    btn.textContent = "■ Stop"; btn.classList.add("on"); status.textContent = "Recording…";
+    tick = setInterval(() => { time.textContent = ((performance.now() - t0) / 1000).toFixed(1) + " s"; }, 100);
+    actx = new AudioContext();
+    const an = actx.createAnalyser(); an.fftSize = 1024;
+    actx.createMediaStreamSource(stream).connect(an);
+    const buf = new Float32Array(an.fftSize);
+    const draw = () => {
+      an.getFloatTimeDomainData(buf);
+      let sum = 0; for (const v of buf) sum += v * v;
+      lvl.style.width = Math.max(0, Math.min(100, (20 * Math.log10(Math.sqrt(sum / buf.length) + 1e-9) + 60) / 50 * 100)) + "%";
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+  });
+  pick.addEventListener("click", () => file.click());
+  file.addEventListener("change", () => {
+    const f = file.files[0]; if (!f) return;
+    status.textContent = "Loaded " + f.name; status.classList.remove("error");
+    done(f, f.name);
+  });
+  return { box, dispose: () => { if (rec && rec.state === "recording") { rec.onstop = null; rec.stop(); } stop(); } };
+}
+
+/* ---------- semitone overlay chart (shadowing and A/B) ---------- */
+function overlayChart(box, t, series) {
+  box.replaceChildren();
+  const W = box.clientWidth, H = 240, m = { t: 10, r: 14, b: 28, l: 44 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const svg = el("svg", { width: W, height: H, role: "img", "aria-label": "Pitch contours overlaid, in semitones" }, box);
+  if (!t.length) { el("text", { x: W / 2, y: H / 2, "text-anchor": "middle" }, svg, "Not enough voiced speech to draw"); return; }
+  const vals = series.flatMap(s => s.values.filter(isNum));
+  const lo = Math.floor(Math.min(...vals) - 1), hi = Math.ceil(Math.max(...vals) + 1);
+  const t0 = t[0], t1 = t[t.length - 1] || 1;
+  const x = v => m.l + (v - t0) / Math.max(t1 - t0, 0.1) * pw;
+  const y = v => m.t + ph * (1 - (v - lo) / (hi - lo));
+  const step = hi - lo > 16 ? 4 : 2;
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+    el("line", { class: v === 0 ? "baseline" : "gridline", x1: m.l, x2: m.l + pw, y1: y(v), y2: y(v) }, svg);
+    el("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg, (v > 0 ? "+" : "") + v + (v + step > hi ? " st" : ""));
+  }
+  const tstep = [1, 2, 5, 10, 15, 30, 60].find(s => (t1 - t0) / s <= Math.max(2, pw / 70)) || 120;
+  for (let v = Math.ceil(t0 / tstep) * tstep; v <= t1; v += tstep) el("text", { x: x(v), y: H - 8, "text-anchor": "middle" }, svg, v + "s");
+  for (const s of series) {
+    let d = "", pen = false, prev = null;
+    s.values.forEach((v, i) => {
+      // break the line across pauses so it doesn't draw false glides
+      if (!isNum(v) || (prev != null && t[i] - t[prev] > 0.25)) pen = false;
+      if (!isNum(v)) return;
+      d += (pen ? "L" : "M") + x(t[i]).toFixed(1) + "," + y(v).toFixed(1); pen = true; prev = i;
+    });
+    el("path", { class: "ovl " + s.cls, d }, svg);
+  }
+  const cross = el("line", { class: "playhead", y1: m.t, y2: m.t + ph, visibility: "hidden" }, svg);
+  const hit = el("rect", { x: m.l, y: m.t, width: pw, height: ph, fill: "transparent" }, svg);
+  hit.addEventListener("pointermove", ev => {
+    const b = svg.getBoundingClientRect(), tt = t0 + (ev.clientX - b.left - m.l) / pw * (t1 - t0);
+    let i = 0, best = Infinity;
+    t.forEach((v, j) => { const d = Math.abs(v - tt); if (d < best) { best = d; i = j; } });
+    cross.setAttribute("x1", x(t[i])); cross.setAttribute("x2", x(t[i])); cross.setAttribute("visibility", "visible");
+    const fmt = v => isNum(v) ? (v > 0 ? "+" : "") + v.toFixed(1) + " st" : "—";
+    showTip(ev.clientX, ev.clientY, t[i].toFixed(1) + " s", series.map(s => s.name + " " + fmt(s.values[i])).join(" · "));
+  });
+  hit.addEventListener("pointerleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
+}
+
+function legendRow(parent, items) {
+  const leg = h("div", "legend", parent);
+  for (const [cls, name] of items) { const s = h("span", "", leg); h("span", "key " + cls, s); s.append(name); }
+}
+
+/* ---------- Today: routine, streak, week ---------- */
+async function practiceToday(body) {
+  const app = state.app || await refreshState();
+  const data = await api("/api/routine");
+  const r = data.routine, wk = data.week;
+
+  const top = h("div", "kpis", body);
+  const st = h("div", "kpi", top); h("div", "label", st, "Streak");
+  h("div", "value", st, wk.streak + (wk.streak === 1 ? " day" : " days"));
+  h("span", "chip " + (data.done_today ? "ok" : "na"), st, data.done_today ? "✓ done today" : "not done yet today");
+  const wkTile = h("div", "kpi wide", top); h("div", "label", wkTile, "Last 7 days");
+  const strip = h("div", "weekstrip", wkTile);
+  for (const d of wk.days) {
+    const c = h("div", "day" + (d.drill ? " done" : d.recordings ? " rec" : ""), strip);
+    h("span", "dot", c); h("span", "small muted", c, d.weekday);
+    c.title = `${d.date}: ${d.drill ? "routine done" : "no routine"}, ${d.recordings} recording${d.recordings === 1 ? "" : "s"}`;
+  }
+  const key = h("div", "weekkey small muted", wkTile);
+  h("span", "dot done", key); key.append("routine done");
+  h("span", "dot rec", key); key.append("recorded only");
+
+  const sum = h("section", "card", body);
+  h("h2", "", sum, "This week");
+  h("p", "", sum, wk.headline);
+
+  const card = h("section", "card", body);
+  const hr = h("div", "row", card);
+  h("h2", "", hr, `Today's routine · ${r.minutes.toFixed(0)} minutes`);
+  h("span", "spacer", hr);
+  const lv = h("div", "seg", hr);
+  for (const level of ["beginner", "intermediate", "advanced"]) {
+    const b = h("button", "", lv, level[0].toUpperCase() + level.slice(1)); b.type = "button";
+    b.setAttribute("aria-pressed", String(r.level === level));
+    b.addEventListener("click", async () => { await api("/api/settings", { method: "PUT", json: { level } }); route(); });
+  }
+  h("p", "muted small", card, `Focus: ${r.focus.name} — ${r.focus.reason}. ${r.note}`);
+  const ol = h("ol", "routine", card);
+  for (const step of r.steps) {
+    const li = h("li", "", ol);
+    const lab = h("label", "steprow", li);
+    const cb = h("input", "", lab); cb.type = "checkbox";
+    const key = `routine-${r.date}-${step.id}`;
+    try { cb.checked = localStorage.getItem(key) === "1"; } catch { /* storage unavailable */ }
+    cb.addEventListener("change", () => { try { localStorage.setItem(key, cb.checked ? "1" : "0"); } catch { /* ignore */ } });
+    h("strong", "", lab, step.title); lab.append(` · ${step.minutes} min`);
+    const ul = h("ul", "steps", li);
+    for (const s of step.steps) h("li", "", ul, s);
+    if (step.id === "words") {
+      const w = h("div", "words", li);
+      for (const word of step.items) h("span", "", w, word);
+    } else if (step.items?.length) {
+      const u2 = h("ul", "sentences", li);
+      for (const s of step.items) h("li", "", u2, s);
+    }
+    if (step.id === "record") {
+      const row = h("div", "row", li); row.style.marginTop = "8px";
+      button(data.done_today ? "Record again" : "Record it now", "primary", row, () => {
+        state.promptMode = "passage"; state.passage = step.passage_index; state.routineDay = true;
+        location.hash = "#record";
+      });
+      if (!data.done_today) button("Mark done without recording", "", row, async () => {
+        const res = await api("/api/routine/done", { method: "POST", json: {} });
+        toast(`Routine done · ${res.streak}-day streak`); route();
+      });
+    }
+  }
+  if (!app.count) h("p", "muted small", card, "Tip: after your first recording, the focus step adapts to your weakest area.");
+}
+
+/* ---------- Shadow ---------- */
+async function practiceShadow(body) {
+  h("p", "lede", body, "Pick a native-speaker clip (a news anchor or podcast, 5–30 seconds). Listen two or three times, then record yourself saying the same words with the same melody.");
+  const refs = await api("/api/references");
+  const lib = h("section", "card", body);
+  h("h2", "", lib, "1 · Reference clip");
+  const row = h("div", "row", lib);
+  const sel = h("select", "", row); sel.setAttribute("aria-label", "Reference clip");
+  if (!refs.length) { const o = h("option", "", sel, "No clips yet: add one →"); o.value = ""; }
+  for (const r of refs) { const o = h("option", "", sel, `${r.name} (${r.duration}s)`); o.value = r.id; }
+  if (state.shadowRef && refs.some(r => r.id === state.shadowRef)) sel.value = state.shadowRef;
+  const add = button("Add a clip", "", row);
+  const del = button("Remove", "danger", row);
+  const file = h("input", "", row); file.type = "file"; file.hidden = true; file.accept = ".m4a,.mp3,.wav,.flac,.aac,.webm,.ogg,.mp4,audio/*";
+  const refStatus = h("p", "status small", lib);
+  const refAudio = h("audio", "", lib); refAudio.controls = true;
+  const setRef = () => {
+    state.shadowRef = sel.value;
+    refAudio.hidden = !sel.value; del.disabled = !sel.value;
+    if (sel.value) refAudio.src = `/api/references/${sel.value}/audio`;
+    const r = refs.find(x => x.id === sel.value);
+    refStatus.textContent = r?.warning || "";
+  };
+  sel.addEventListener("change", setRef); setRef();
+  add.addEventListener("click", () => file.click());
+  file.addEventListener("change", async () => {
+    const f = file.files[0]; if (!f) return;
+    const name = prompt("Name this clip", f.name.replace(/\.[^.]+$/, "")) ?? f.name;
+    const form = new FormData(); form.append("audio", f, f.name); form.append("name", name);
+    refStatus.replaceChildren(); h("span", "spinner", refStatus); refStatus.append(" Adding…");
+    try {
+      // Update the picker in place: re-rendering the page would cut off a recording in progress.
+      const r = await api("/api/references", { method: "POST", form });
+      refs.push(r);
+      if (!sel.value) sel.replaceChildren();
+      const o = h("option", "", sel, `${r.name} (${r.duration}s)`); o.value = r.id;
+      sel.value = r.id; setRef();
+      toast("Clip added");
+    } catch (err) { refStatus.textContent = err.message; refStatus.classList.add("error"); }
+    file.value = "";
+  });
+  del.addEventListener("click", async () => {
+    const id = sel.value;
+    if (!id || !confirm("Remove this reference clip?")) return;
+    await api("/api/references/" + id, { method: "DELETE" });
+    refs.splice(refs.findIndex(r => r.id === id), 1);
+    [...sel.options].find(o => o.value === id)?.remove();
+    if (!refs.length) { const o = h("option", "", sel, "No clips yet: add one →"); o.value = ""; }
+    setRef();
+  });
+
+  const you = h("section", "card", body);
+  h("h2", "", you, "2 · Your version");
+  h("p", "muted small", you, "Copy the melody: where the speaker rises, rise; where they fall, fall. Exact words matter less than the shape.");
+  const out = h("section", "card", body); out.hidden = true;
+  const mr = miniRecorder(you, "Record", async (blob, name) => {
+    if (!sel.value) { toast("Add or pick a reference clip first"); return; }
+    out.hidden = false; out.replaceChildren(); h("span", "spinner", out); out.append(" Comparing…");
+    const form = new FormData(); form.append("audio", blob, name); form.append("reference", sel.value);
+    try { renderShadow(out, await api("/api/shadow", { method: "POST", form })); }
+    catch (err) { out.replaceChildren(); h("p", "status error", out, err.message); }
+  });
+  cleanup = mr.dispose;
+}
+
+function renderShadow(out, r) {
+  out.replaceChildren();
+  h("h2", "", out, "3 · How close you were");
+  const k = h("div", "kpis", out);
+  const tile = (label, v, sub) => { const t = h("div", "kpi", k); h("div", "label", t, label); h("div", "value", t, v); if (sub) h("div", "small muted", t, sub); };
+  tile("Shadowing score", Math.round(r.score) + "/100");
+  tile("Contour match", Math.round(r.contour_match) + "/100", "shape of your pitch");
+  tile("Range match", Math.round(r.range_match) + "/100", `you ${r.user_span?.toFixed(1)} vs ${r.ref_span?.toFixed(1)} semitones`);
+  if (r.ending_agreement != null) tile("Phrase endings", pct(r.ending_agreement), "same direction as reference");
+  legendRow(out, [["ref", "Reference"], ["you", "You (time-aligned)"]]);
+  const chart = h("div", "chart", out);
+  const draw = () => overlayChart(chart, r.overlay.ref_t, [
+    { values: r.overlay.ref_st, cls: "ref", name: "Reference" },
+    { values: r.overlay.user_st, cls: "you", name: "You" },
+  ]);
+  requestAnimationFrame(draw);
+  if (r.endings.length) {
+    h("div", "label", out, "Phrase endings");
+    const ul = h("ul", "flags", out);
+    for (const c of r.endings) {
+      const li = h("li", "", ul);
+      h("span", "sev " + (c.user_direction == null ? "info" : c.ref_direction === c.user_direction ? "good" : "warning"), li,
+        c.user_direction == null ? "•" : c.ref_direction === c.user_direction ? "✓" : "!");
+      h("span", "", li, `${c.ref_time.toFixed(1)}s: reference ${c.ref_direction} (${c.ref_semitones > 0 ? "+" : ""}${c.ref_semitones} st)` +
+        (c.user_direction ? `, you ${c.user_direction} (${c.user_semitones > 0 ? "+" : ""}${c.user_semitones} st)` : ", no matching ending from you"));
+    }
+  }
+  h("div", "label", out, "Tips");
+  const tl = h("ul", "sentences", out);
+  for (const t of r.tips) h("li", "", tl, t);
+}
+
+/* ---------- A/B contrast ---------- */
+async function practiceAB(body) {
+  h("p", "lede", body, "Say the same sentence twice: try it two different ways (say, your usual way, then with a strong fall at the end). The app tells you which sounds more American, and why.");
+  const lib = await api("/api/coaching");
+  const pool = lib.modules.find(m => m.id === "hrt").examples;
+  const card = h("section", "card", body);
+  h("h2", "", card, "Sentence");
+  const row = h("div", "row", card);
+  const sel = h("select", "", row); sel.setAttribute("aria-label", "Sentence");
+  pool.forEach((s, i) => { const o = h("option", "", sel, s); o.value = i; });
+  const own = h("option", "", sel, "My own sentence…"); own.value = "own";
+  const text = h("p", "prompt-topic", card, pool[0]);
+  const input = h("input", "", card); input.type = "text"; input.hidden = true; input.placeholder = "Type your sentence";
+  input.setAttribute("aria-label", "Your sentence"); input.style.width = "100%";
+  sel.addEventListener("change", () => {
+    const mine = sel.value === "own";
+    input.hidden = !mine; text.hidden = mine;
+    if (!mine) text.textContent = pool[+sel.value];
+  });
+  const g = h("div", "grid2", body);
+  const takes = {};
+  const out = h("section", "card", body); out.hidden = true;
+  const go = button("Compare A and B", "primary", body);
+  go.disabled = true; go.style.marginTop = "12px";
+  const disposers = [];
+  for (const id of ["A", "B"]) {
+    const c = h("section", "card", g);
+    h("h2", "", c, "Take " + id);
+    disposers.push(miniRecorder(c, "Record take " + id, (blob, name) => {
+      takes[id] = { blob, name }; go.disabled = !(takes.A && takes.B);
+    }).dispose);
+  }
+  cleanup = () => disposers.forEach(d => d());
+  go.addEventListener("click", async () => {
+    out.hidden = false; out.replaceChildren(); h("span", "spinner", out); out.append(" Comparing…");
+    const form = new FormData();
+    form.append("audio_a", takes.A.blob, takes.A.name); form.append("audio_b", takes.B.blob, takes.B.name);
+    try { renderAB(out, await api("/api/ab", { method: "POST", form })); out.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    catch (err) { out.replaceChildren(); h("p", "status error", out, err.message); }
+  });
+}
+
+function renderAB(out, r) {
+  out.replaceChildren();
+  h("h2", "", out, r.winner ? `Take ${r.winner} sounds more American` : "Too close to call");
+  const ul = h("ul", "sentences", out);
+  for (const x of r.reasons) h("li", "", ul, x);
+  const k = h("div", "kpis", out);
+  for (const [id, p] of [["A", r.a], ["B", r.b]]) {
+    const t = h("div", "kpi", k);
+    h("div", "label", t, "Take " + id + (r.winner === id ? " ✓" : ""));
+    h("div", "value", t, Math.round(p.score * 100) + "/100");
+    h("div", "small muted", t, `ends ${p.final_direction ?? "?"}${p.final_semitones != null ? ` (${p.final_semitones > 0 ? "+" : ""}${p.final_semitones} st)` : ""} · range ${p.span?.toFixed?.(1) ?? "?"} st`);
+    const a = h("audio", "", t); a.controls = true; a.src = id === "A" ? r.audio_a : r.audio_b;
+  }
+  legendRow(out, [["ref", "Take A"], ["you", "Take B (time-aligned)"]]);
+  const chart = h("div", "chart", out);
+  requestAnimationFrame(() => overlayChart(chart, r.overlay.t, [
+    { values: r.overlay.a_st, cls: "ref", name: "A" }, { values: r.overlay.b_st, cls: "you", name: "B" },
+  ]));
+}
+
+/* ---------- Modules (the coaching library) ---------- */
+async function practiceModules(body, focus) {
   const data = await api("/api/coaching");
-  h("h1", "", view, "Practice");
-  h("p", "lede", view, data.has_recordings
+  h("p", "lede", body, data.has_recordings
     ? "Recommended modules come first, based on your latest take. Open one, work through the drills, then record it."
     : "Record a take first and the modules that matter most for you will be marked. Meanwhile, browse everything.");
   const recById = Object.fromEntries(data.recommended.map(r => [r.id, r]));
@@ -596,19 +964,19 @@ async function viewPractice(focus) {
   const byId = Object.fromEntries(data.modules.map(m => [m.id, m]));
   order.forEach((id, idx) => {
     const m = byId[id], rec = recById[id];
-    const det = h("details", "module", view);
+    const det = h("details", "module", body);
     det.id = "module-" + id;
     if (focus ? focus === id : idx === 0 && rec) det.open = true;
     const sum = h("summary", "", det);
     h("span", "title", sum, m.name);
     if (rec) h("span", "badge rec", sum, rec.reasons[0].startsWith("your ") ? "for your accent" : "recommended");
     if (m.detection === "planned") h("span", "badge plan", sum, "not measured yet");
-    const body = h("div", "body", det);
-    if (rec) h("p", "small", body, "Why for you: " + rec.reasons.join("; ") + (rec.provisional ? " (provisional: short recording)" : ""));
-    h("p", "", body, m.description);
-    const tgt = h("p", "", body); h("strong", "", tgt, "Target: "); tgt.append(m.target);
-    h("div", "label", body, "Drills");
-    const ol = h("ol", "drills", body);
+    const b = h("div", "body", det);
+    if (rec) h("p", "small", b, "Why for you: " + rec.reasons.join("; ") + (rec.provisional ? " (provisional: short recording)" : ""));
+    h("p", "", b, m.description);
+    const tgt = h("p", "", b); h("strong", "", tgt, "Target: "); tgt.append(m.target);
+    h("div", "label", b, "Drills");
+    const ol = h("ol", "drills", b);
     for (const d of m.drills) {
       const li = h("li", "", ol);
       h("strong", "", li, d.name);
@@ -617,25 +985,25 @@ async function viewPractice(focus) {
       for (const s of d.steps) h("li", "", steps, s);
     }
     if (m.examples.length) {
-      h("div", "label", body, "Practice sentences");
-      const ul = h("ul", "sentences", body);
+      h("div", "label", b, "Practice sentences");
+      const ul = h("ul", "sentences", b);
       for (const s of m.examples) h("li", "", ul, s);
     }
     if (m.words.length) {
-      h("div", "label", body, "Key words");
-      const w = h("div", "words", body);
+      h("div", "label", b, "Key words");
+      const w = h("div", "words", b);
       for (const s of m.words) h("span", "", w, s);
     }
     if (m.progress.length) {
-      h("div", "label", body, "How you'll know it's working");
-      const ul = h("ul", "sentences", body);
+      h("div", "label", b, "How you'll know it's working");
+      const ul = h("ul", "sentences", b);
       const live = rec ? Object.fromEntries(rec.progress.filter(p => p.metric).map(p => [p.metric, p])) : {};
       for (const p of m.progress) {
         const cur = p.metric && live[p.metric];
         h("li", "", ul, p.text + (cur && cur.current ? ` — now ${cur.current}${cur.on_target ? " ✓" : ""}` : ""));
       }
     }
-    const row = h("div", "row", body); row.style.marginTop = "14px";
+    const row = h("div", "row", b); row.style.marginTop = "14px";
     button("Record this drill", "primary", row, () => {
       state.drill = { id: m.id, name: m.name, examples: m.examples.length ? m.examples : m.words };
       state.promptMode = "drill";

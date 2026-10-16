@@ -9,10 +9,11 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import shutil
 import tomllib
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from urllib.parse import urlsplit
 from importlib import resources
 from pathlib import Path
@@ -20,10 +21,12 @@ from pathlib import Path
 from flask import Flask, Response, abort, jsonify, request, send_file
 
 from accent_analyzer.analysis.audio import SUPPORTED_EXTENSIONS, AudioLoadError
+from accent_analyzer.analysis.compare import REFERENCE_F0, compare_takes, shadow
 from accent_analyzer.analysis.pipeline import analyze_file
 from accent_analyzer.app.payload import metrics_only_payload, result_payload
 from accent_analyzer.coaching import ACCENTS, load_library, recommend
 from accent_analyzer.coaching.library import ACCENT_NAMES
+from accent_analyzer.coaching.routine import LEVELS, build_routine, passages as _passages, streak, weekly_summary
 from accent_analyzer.dashboard import dashboard_data, render_dashboard
 from accent_analyzer.history import HistoryStore, progression
 from accent_analyzer.reports import build_pdf, render_html
@@ -36,7 +39,8 @@ VOICE_RANGES = {
     "medium": {"label": "Medium voice", "f0_min": 80.0, "f0_max": 320.0},
     "high": {"label": "High voice", "f0_min": 120.0, "f0_max": 400.0},
 }
-DEFAULT_SETTINGS = {"accent": None, "voice": "medium", "pitch_method": "autocorr"}
+DEFAULT_SETTINGS = {"accent": None, "voice": "medium", "pitch_method": "autocorr", "level": "intermediate"}
+KEEP_PRACTICE_FILES = 40
 MIME_EXT = {
     "audio/webm": ".webm", "audio/ogg": ".ogg", "audio/mp4": ".mp4", "audio/x-m4a": ".m4a",
     "audio/aac": ".aac", "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/x-wav": ".wav",
@@ -55,7 +59,10 @@ class Paths:
         self.recordings = data_dir / "recordings"
         self.analyses = data_dir / "analyses"
         self.settings = data_dir / "settings.json"
-        for d in (self.data, self.recordings, self.analyses):
+        self.references = data_dir / "references"
+        self.references_index = self.references / "index.json"
+        self.practice = data_dir / "practice"
+        for d in (self.data, self.recordings, self.analyses, self.references, self.practice):
             d.mkdir(parents=True, exist_ok=True)
 
     def audio_for(self, record_id: int) -> Path | None:
@@ -194,6 +201,10 @@ def create_app(data_dir: str | Path | None = None, history_path: str | Path | No
                 if body["voice"] not in VOICE_RANGES:
                     return jsonify(error="Unknown voice range"), 400
                 settings["voice"] = body["voice"]
+            if "level" in body:
+                if body["level"] not in LEVELS:
+                    return jsonify(error="Unknown level"), 400
+                settings["level"] = body["level"]
             if "pitch_method" in body:
                 if body["pitch_method"] not in ("autocorr", "yin"):
                     return jsonify(error="Unknown pitch method"), 400
@@ -203,7 +214,7 @@ def create_app(data_dir: str | Path | None = None, history_path: str | Path | No
 
     @app.get("/api/prompts")
     def prompts():
-        text = resources.files("accent_analyzer.app").joinpath("prompts.toml").read_text(encoding="utf-8")
+        text = resources.files("accent_analyzer.coaching").joinpath("prompts.toml").read_text(encoding="utf-8")
         data = tomllib.loads(text)
         return jsonify(
             passages=[{**p, "text": " ".join(p["text"].split())} for p in data["passage"]],
@@ -330,5 +341,141 @@ def create_app(data_dir: str | Path | None = None, history_path: str | Path | No
                 "progress": [{"text": p.text, "metric": p.metric} for p in m.progress],
             })
         return jsonify(modules=modules, recommended=recommended, has_recordings=bool(records))
+
+    # ---- practice: references, shadowing, A/B, daily routine ------------------------
+    def save_upload(field: str, folder: Path, stem: str | None = None) -> Path:
+        upload = request.files.get(field)
+        if upload is None:
+            raise ValueError("No audio received.")
+        ext = _ext_for(upload)
+        if ext is None:
+            raise ValueError("Unsupported audio format. Use m4a, mp3, wav, flac, webm, ogg or mp4.")
+        path = folder / f"{stem or uuid.uuid4().hex}{ext}"
+        upload.save(path)
+        return path
+
+    def analyze_practice(path: Path, f0: tuple[float, float] | None = None):
+        settings = load_settings()
+        voice = VOICE_RANGES[settings["voice"]]
+        lo, hi = f0 or (voice["f0_min"], voice["f0_max"])
+        result = analyze_file(path, pitch_method=settings["pitch_method"], f0_min=lo, f0_max=hi)
+        if result.register.n_voiced == 0:
+            raise ValueError("No voice detected in that recording.")
+        return result
+
+    def prune_practice() -> None:
+        files = sorted(paths.practice.iterdir(), key=lambda f: f.stat().st_mtime, reverse=True)
+        for f in files[KEEP_PRACTICE_FILES:]:
+            f.unlink(missing_ok=True)
+
+    def references() -> list[dict]:
+        try:
+            return json.loads(paths.references_index.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+
+    def reference_file(ref_id: str) -> Path | None:
+        if not re.fullmatch(r"[0-9a-f]{32}", ref_id):
+            return None
+        found = sorted(paths.references.glob(ref_id + ".*"))
+        return found[0] if found else None
+
+    @app.get("/api/references")
+    def list_references():
+        return jsonify(references())
+
+    @app.post("/api/references")
+    def add_reference():
+        ref_id = uuid.uuid4().hex
+        try:
+            path = save_upload("audio", paths.references, ref_id)
+            result = analyze_practice(path, REFERENCE_F0)
+        except (ValueError, AudioLoadError) as exc:
+            for f in paths.references.glob(ref_id + ".*"):
+                f.unlink(missing_ok=True)
+            return jsonify(error=str(exc)), 400
+        name = (request.form.get("name") or "").strip()[:80] or Path(request.files["audio"].filename or "Reference").stem
+        entry = {"id": ref_id, "name": name, "duration": round(result.duration, 1),
+                 "added": datetime.now().isoformat(timespec="minutes"),
+                 "warning": "Long clip: shadowing works best with 5-30 seconds." if result.duration > 45 else None}
+        paths.references_index.write_text(json.dumps(references() + [entry], indent=2), encoding="utf-8")
+        return jsonify(entry), 201
+
+    @app.delete("/api/references/<ref_id>")
+    def delete_reference(ref_id: str):
+        path = reference_file(ref_id)
+        if path is None:
+            abort(404)
+        path.unlink(missing_ok=True)
+        paths.references_index.write_text(json.dumps([r for r in references() if r["id"] != ref_id], indent=2),
+                                          encoding="utf-8")
+        return jsonify(deleted=ref_id)
+
+    @app.get("/api/references/<ref_id>/audio")
+    def reference_audio(ref_id: str):
+        path = reference_file(ref_id)
+        if path is None:
+            abort(404)
+        return send_file(path, mimetype=AUDIO_MIME.get(path.suffix, "application/octet-stream"), conditional=True)
+
+    @app.get("/api/practice/<name>")
+    def practice_audio(name: str):
+        if not re.fullmatch(r"[0-9a-f]{32}\.[a-z0-9]+", name):
+            abort(404)
+        path = paths.practice / name
+        if not path.is_file():
+            abort(404)
+        return send_file(path, mimetype=AUDIO_MIME.get(path.suffix, "application/octet-stream"), conditional=True)
+
+    @app.post("/api/shadow")
+    def shadow_take():
+        ref = reference_file(request.form.get("reference", ""))
+        if ref is None:
+            return jsonify(error="Pick a reference clip first."), 400
+        try:
+            take = save_upload("audio", paths.practice)
+            result = shadow(analyze_practice(ref, REFERENCE_F0), analyze_practice(take))
+        except (ValueError, AudioLoadError) as exc:
+            return jsonify(error=str(exc)), 400
+        prune_practice()
+        return jsonify({**result.to_dict(), "take_audio": f"/api/practice/{take.name}"})
+
+    @app.post("/api/ab")
+    def ab_compare():
+        try:
+            a = save_upload("audio_a", paths.practice)
+            b = save_upload("audio_b", paths.practice)
+            result = compare_takes(analyze_practice(a), analyze_practice(b))
+        except (ValueError, AudioLoadError) as exc:
+            return jsonify(error=str(exc)), 400
+        prune_practice()
+        return jsonify({**result.to_dict(), "audio_a": f"/api/practice/{a.name}", "audio_b": f"/api/practice/{b.name}"})
+
+    @app.get("/api/routine")
+    def routine():
+        settings = load_settings()
+        level = request.args.get("level") or settings["level"]
+        if level not in LEVELS:
+            return jsonify(error="Unknown level"), 400
+        today = date.today()
+        with store() as st:
+            records, days = st.all(), st.drill_days()
+        latest = records[-1] if records else None
+        metrics = {k: latest.get(k) for k in latest.metrics} if latest else None
+        data = build_routine(today, level, metrics, settings["accent"])
+        passage_ids = [p["id"] for p in _passages()]
+        rec_step = next(s for s in data["steps"] if s["id"] == "record")
+        rec_step["passage_index"] = passage_ids.index(rec_step["passage"])
+        return jsonify(routine=data, week=weekly_summary(records, days, today), done_today=today in days)
+
+    @app.post("/api/routine/done")
+    def routine_done():
+        body = request.get_json(silent=True) or {}
+        rid = body.get("recording_id")
+        with store() as st:
+            st.log_drill(date.today(), level=load_settings()["level"], minutes=5,
+                         recording_id=rid if isinstance(rid, int) else None)
+            days = st.drill_days()
+        return jsonify(done=True, streak=streak(days))
 
     return app
