@@ -5,8 +5,8 @@ training toward a General American accent. It measures intonation (pitch registe
 range, phrase-final rises/falls, phrase onsets) and maps off-target metrics to
 coaching drills.
 
-**Status:** deliverables 1–2 of 6: audio pipeline, F0 extraction, register metrics,
-phrase-ending (HRT) and onset analysis, 3-second window movement.
+**Status:** deliverables 1–3 of 6: audio pipeline, F0 extraction, register metrics,
+phrase-ending (HRT) and onset analysis, 3-second window movement, HTML/PDF reports.
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## Setup
@@ -17,6 +17,7 @@ Requires [uv](https://docs.astral.sh/uv/) and `ffmpeg` on `PATH`.
 uv sync
 uv run accent-analyzer analyze recording.m4a
 uv run accent-analyzer analyze recording.m4a --json
+uv run accent-analyzer analyze recording.m4a --name "Monday morning" -o report.html -o report.pdf
 uv run accent-analyzer analyze recording.m4a --pitch-method yin --f0-min 70 --f0-max 260
 ```
 
@@ -45,6 +46,15 @@ for high ones.
 Phrases are split at unvoiced runs ≥ 0.20 s, falling back to 0.12 s when that
 yields fewer than 15 phrase endings; both results are reported. Fewer than 10
 measurable endings triggers an "insufficient data" caveat.
+
+## Reports
+
+`-o/--output` writes a report; the format follows the extension (`.html` or `.pdf`) and
+the flag can be repeated. The HTML file is self-contained (charts embedded) and follows
+the viewer's light/dark setting. Sections: headline verdict, scorecard, pitch contour,
+phrase-ending histogram (with both pause thresholds and a table of every ending),
+3-second window and onset breakdowns, findings, and coaching recommendations. The
+"compared with previous sessions" trajectory appears once session history exists.
 
 ## Tests
 

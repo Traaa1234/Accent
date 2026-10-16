@@ -1,35 +1,6 @@
 """End-to-end expectations on the four synthetic speech fixtures."""
 
-import pytest
-
-from accent_analyzer.analysis.pitch import extract_f0
-from accent_analyzer.analysis.pipeline import analyze_track
 from accent_analyzer.targets import Status
-import synth
-
-
-def _analyze(audio):
-    return analyze_track(extract_f0(audio, synth.SR), duration=len(audio) / synth.SR)
-
-
-@pytest.fixture(scope="module")
-def nze():
-    return _analyze(synth.nze_like())
-
-
-@pytest.fixture(scope="module")
-def ame():
-    return _analyze(synth.ame_like())
-
-
-@pytest.fixture(scope="module")
-def short():
-    return _analyze(synth.short_clip())
-
-
-@pytest.fixture(scope="module")
-def continuous():
-    return _analyze(synth.continuous_speech())
 
 
 def codes(result):

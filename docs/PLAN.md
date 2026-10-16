@@ -14,7 +14,8 @@ src/accent_analyzer/
     windows.py         3-second sliding-window slope classification
     interpret.py       single-recording interpretation rules -> Findings
     pipeline.py        analyze_file() -> AnalysisResult (the object everything downstream reads)
-  reports/             [3] matplotlib charts -> HTML (Jinja-free string templates) + PDF (reportlab)
+  reports/             charts.py (matplotlib, light + dark), verdict.py (headline + scorecard),
+                       html_report.py (self-contained HTML), pdf_report.py (reportlab)
   history/             [4] SQLite store, trajectory queries, progression warnings
   coaching/            [5] module library (data, not code) + recommendation engine
   dashboard/           [6] static HTML dashboard generated from history
@@ -33,7 +34,7 @@ re-run DSP.
    0.12s results), phrase-end Δ over last 500 ms (first-third vs last-third median),
    Rising/Falling/Level + BIG/MOD/Small, HRT%, onset ratio HIGH/MID/LOW,
    3 s window slopes. Fixtures: NZE-like, AmE-like, short clip, continuous speech.
-3. **Reports**: headline verdict, scorecard, contour, phrase-end histogram,
+3. **Reports** — done. Headline verdict, scorecard, contour, phrase-end histogram,
    window breakdown, onset distribution, recommendations; HTML first, then PDF.
 4. **History**: SQLite (`recordings` table + JSON blob of distributions), trajectory
    queries, register-deflation / complacency-regression / integration-milestone /
@@ -73,6 +74,15 @@ detection.
   direction asymmetry, voiced-ratio bands, foundation vs direction axes,
   integration milestone. Register-independent HRT needs history (step 4); each
   result already carries its register label (animated > 180 Hz, calm < 160 Hz).
+
+* **Report hooks for later steps**: `render_html/build_pdf` already accept
+  `history=[metrics dicts]` (trajectory small multiples: HRT %, falls %, mean F0,
+  std dev, range ratio, each on its own axis) and `recommendations=[{title, why, drills}]`.
+  Steps 4 and 5 only need to supply the data.
+* **Chart colour**: falling = blue, rising = red, level = gray (diverging scheme,
+  CVD-validated in light and dark). Direction is also carried by position, ▲/▼ markers
+  or labels, never colour alone. Static PNG charts (shared with the PDF), so no hover
+  tooltips; every chart's numbers are also in a table or caption.
 
 ## Known calibration risks
 

@@ -5,11 +5,14 @@ from __future__ import annotations
 import json
 import math
 
+from pathlib import Path
+
 import click
 
 from accent_analyzer.analysis import AudioLoadError
 from accent_analyzer.analysis.pipeline import AnalysisResult, analyze_file
 from accent_analyzer.analysis.pitch import DEFAULT_F0_MAX, DEFAULT_F0_MIN
+from accent_analyzer.reports import FORMATS, write_report
 from accent_analyzer.targets import TARGETS, Status
 
 _STATUS_MARK = {Status.ON_TARGET: "ok", Status.BELOW: "LOW", Status.ABOVE: "HIGH", Status.UNKNOWN: "?"}
@@ -98,12 +101,27 @@ def cli() -> None:
 @click.option("--f0-min", type=float, default=DEFAULT_F0_MIN, show_default=True)
 @click.option("--f0-max", type=float, default=DEFAULT_F0_MAX, show_default=True)
 @click.option("--json", "as_json", is_flag=True, help="Print the full analysis as JSON.")
-def analyze(path: str, pitch_method: str, f0_min: float, f0_max: float, as_json: bool) -> None:
+@click.option(
+    "--output", "-o", "outputs", multiple=True, type=click.Path(dir_okay=False),
+    help="Write a report; format from extension (.html or .pdf). Repeatable.",
+)
+@click.option("--name", help="Title for the report (defaults to the file name).")
+def analyze(
+    path: str, pitch_method: str, f0_min: float, f0_max: float, as_json: bool,
+    outputs: tuple[str, ...], name: str | None,
+) -> None:
     """Analyze a recording (.m4a, .mp3, .wav, .flac)."""
+    for out in outputs:
+        if Path(out).suffix.lower() not in FORMATS:
+            raise click.BadParameter(f"{out}: use a .html or .pdf extension", param_hint="--output")
     try:
         result = analyze_file(path, pitch_method=pitch_method, f0_min=f0_min, f0_max=f0_max)
     except (AudioLoadError, NotImplementedError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
+
+    for out in outputs:
+        written = write_report(result, out, title=name)
+        click.echo(f"Report written: {written}", err=as_json)
 
     if as_json:
         click.echo(json.dumps(_json_safe(result.to_dict()), indent=2))
