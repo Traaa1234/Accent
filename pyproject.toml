@@ -1,0 +1,32 @@
+[project]
+name = "accent-analyzer"
+version = "0.1.0"
+description = "Acoustic analysis and coaching tool for training toward an American English accent"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.5.0",
+    "ffmpeg-python>=0.2.0",
+    "librosa>=1.0.0",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.4",
+    "reportlab>=5.0.1",
+    "scipy>=1.18.1",
+    "soundfile>=0.14.0",
+]
+
+[project.scripts]
+accent-analyzer = "accent_analyzer.analyzer:cli"
+
+[build-system]
+requires = ["uv_build>=0.11.32,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: tests that run probabilistic YIN or other slow paths"]
