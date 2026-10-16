@@ -10,9 +10,10 @@ src/accent_analyzer/
     audio.py           ffmpeg decode -> 16 kHz mono float32, DC removal, peak normalize
     pitch.py           F0 tracking: autocorr (default), pYIN (--pitch-method yin), CREPE (planned)
     metrics.py         register & variability metrics
-    phrasing.py        [2] pause detection (adaptive 0.20s -> 0.12s), phrase-end direction, onsets
-    windows.py         [2] 3-second sliding-window slope classification
-    interpret.py       [2/5] interpretation rules (direction asymmetry, small-sample caveat, ...)
+    phrasing.py        pause detection (adaptive 0.20s -> 0.12s), phrase-end direction, onsets
+    windows.py         3-second sliding-window slope classification
+    interpret.py       single-recording interpretation rules -> Findings
+    pipeline.py        analyze_file() -> AnalysisResult (the object everything downstream reads)
   reports/             [3] matplotlib charts -> HTML (Jinja-free string templates) + PDF (reportlab)
   history/             [4] SQLite store, trajectory queries, progression warnings
   coaching/            [5] module library (data, not code) + recommendation engine
@@ -28,7 +29,7 @@ re-run DSP.
 ## Deliverables
 
 1. **Core pipeline + F0 + basic metrics** — done.
-2. **Phrasing**: pause runs from F0=0, adaptive threshold (report both 0.20s and
+2. **Phrasing** — done. Pause runs from F0=0, adaptive threshold (report both 0.20s and
    0.12s results), phrase-end Δ over last 500 ms (first-third vs last-third mean),
    Rising/Falling/Level + BIG/MOD/Small, HRT%, onset ratio HIGH/MID/LOW,
    3 s window slopes. Fixtures: NZE-like, AmE-like, short clip, continuous speech.
@@ -58,9 +59,25 @@ Without alignment there is no honest acoustic surrogate for the segmental featur
 so v1 will offer those modules from self-reported background instead of claiming
 detection.
 
+## Design decisions that differ from the spec
+
+* **Phrase-end pitch uses the median** of each third of the 500 ms window, not the
+  mean, so a single octave jump or creaky frame can't flip the direction.
+* **3-second windows fit within phrases**: one shared slope, a separate intercept per
+  phrase. A plain line fit across a pause reads the reset (low end of one phrase,
+  high start of the next) as a rise; on the AmE-like fixture that made 52% of
+  windows "rising". `analyze_windows(track)` without phrases gives the plain fit.
+* **Phrase boundaries include start and end of speech**, so N internal pauses give
+  N + 1 phrase endings and onsets. The adaptive fallback counts phrase endings.
+* **Interpretation rules done in step 2**: small-sample caveat (both thresholds),
+  direction asymmetry, voiced-ratio bands, foundation vs direction axes,
+  integration milestone. Register-independent HRT needs history (step 4); each
+  result already carries its register label (animated > 180 Hz, calm < 160 Hz).
+
 ## Known calibration risks
 
-* **Range-ratio target (2.5–4.0×)** is wide for p90/p10. Autocorrelation octave
+* **Range-ratio target (2.5–4.0×)** is wide for p90/p10. The AmE-like fixture, whose
+  contours span roughly 85–300 Hz, measures 2.16×. Autocorrelation octave
   errors inflate this metric directly, so it should be validated against pYIN on
   real recordings before trusting coaching triggers that depend on it.
 * Voiced ratio depends on the confidence threshold and silence gate; it measures

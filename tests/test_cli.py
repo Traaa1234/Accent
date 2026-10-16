@@ -14,8 +14,10 @@ def test_analyze_json(tmp_path):
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["pitch_method"] == "autocorr"
-    assert 0.7 < data["voiced_ratio"] < 0.8
-    assert 1.5 < data["range_ratio"] < 2.0
+    assert 0.7 < data["metrics"]["voiced_ratio"] < 0.8
+    assert 1.5 < data["metrics"]["range_ratio"] < 2.0
+    assert set(data["phrasing"]["by_threshold"]) == {"0.20", "0.12"}
+    assert any(f["code"] == "small_sample" for f in data["findings"])
 
 
 def test_analyze_table(tmp_path):
@@ -23,7 +25,9 @@ def test_analyze_table(tmp_path):
     sf.write(path, harmonic_tone(150, 1.0), 16_000)
     result = CliRunner().invoke(cli, ["analyze", str(path)])
     assert result.exit_code == 0, result.output
-    assert "Range ratio" in result.output and "[LOW]" in result.output
+    for section in ("Register & variability", "Phrase endings", "Phrase onsets", "3-second windows", "Findings"):
+        assert section in result.output
+    assert "[LOW]" in result.output
 
 
 def test_analyze_reports_errors(tmp_path):

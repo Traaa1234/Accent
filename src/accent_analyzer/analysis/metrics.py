@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 
 from accent_analyzer.analysis.pitch import PitchTrack
-from accent_analyzer.targets import TARGETS, Status
+from accent_analyzer.targets import Status, evaluate
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,7 @@ class RegisterMetrics:
         return asdict(self)
 
     def statuses(self) -> dict[str, Status]:
-        return {name: target.status(getattr(self, name)) for name, target in TARGETS.items()}
+        return evaluate(self.to_dict())
 
 
 def register_metrics(track: PitchTrack) -> RegisterMetrics:

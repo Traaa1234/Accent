@@ -5,7 +5,8 @@ training toward a General American accent. It measures intonation (pitch registe
 range, phrase-final rises/falls, phrase onsets) and maps off-target metrics to
 coaching drills.
 
-**Status:** deliverable 1 of 6: audio pipeline, F0 extraction and register metrics.
+**Status:** deliverables 1–2 of 6: audio pipeline, F0 extraction, register metrics,
+phrase-ending (HRT) and onset analysis, 3-second window movement.
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## Setup
@@ -36,6 +37,14 @@ for high ones.
 | Std dev | ≥ 60 Hz |
 | Range ratio p90/p10 | 2.5–4.0× |
 | Voiced ratio | 60–80% |
+| HRT: rising phrase endings (Δ > +10 Hz over last 500 ms) | ≤ 25% |
+| HIGH onsets (first 500 ms > 1.15 × mean F0) | ≥ 40% |
+| LOW onsets (< 0.9 × mean F0) | ≤ 20% |
+| 3 s windows falling / level / rising (±5 Hz/s) | 50–65% / 25–35% / 10–20% |
+
+Phrases are split at unvoiced runs ≥ 0.20 s, falling back to 0.12 s when that
+yields fewer than 15 phrase endings; both results are reported. Fewer than 10
+measurable endings triggers an "insufficient data" caveat.
 
 ## Tests
 
