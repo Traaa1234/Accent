@@ -130,15 +130,27 @@ def build_pdf(result, title: str | None = None, history: list[dict] | None = Non
 
     story.append(Paragraph("Coaching recommendations", st["h2"]))
     if recommendations:
-        for rec in recommendations:
-            story.append(Paragraph(f"<b>{escape(rec['title'])}</b>", st["body"]))
+        for n, rec in enumerate(recommendations, start=1):
+            story.append(Paragraph(f"<b>{n}. {escape(rec['title'])}</b>", st["body"]))
             if rec.get("why"):
                 story.append(Paragraph(escape(rec["why"]), st["small"]))
+            if rec.get("target"):
+                story.append(Paragraph(f"<b>Target:</b> {escape(rec['target'])}", st["small"]))
             for i, d in enumerate(rec.get("drills", []), start=1):
-                story.append(Paragraph(escape(f"{i}. {d}"), st["small"]))
-            story.append(Spacer(1, 4))
+                if isinstance(d, str):
+                    text = escape(d)
+                else:
+                    text = f"<b>{escape(d['name'])}</b>. {escape(' '.join(d.get('steps', [])))}"
+                story.append(Paragraph(f"{i}. {text}", st["small"]))
+            if rec.get("examples"):
+                story.append(Paragraph("<i>Practice:</i> " + escape(" · ".join(rec["examples"])), st["small"]))
+            if rec.get("words"):
+                story.append(Paragraph("<i>Key words:</i> " + escape(", ".join(rec["words"])), st["small"]))
+            story.append(Spacer(1, 6))
+    elif recommendations == []:
+        story.append(Paragraph("No coaching modules triggered.", st["small"]))
     else:
-        story.append(Paragraph("The coaching library is not connected yet; see the findings above.", st["small"]))
+        story.append(Paragraph("Coaching recommendations were not generated for this report.", st["small"]))
 
     doc.build(story)
     return buf.getvalue()

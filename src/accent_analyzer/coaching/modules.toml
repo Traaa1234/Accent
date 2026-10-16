@@ -1,0 +1,379 @@
+# Coaching content library: NZE / AuE / British / Indian English -> General American.
+#
+# Each [[module]] has:
+#   id, name, priority (lower = earlier among equals)
+#   description   why it matters to American listeners
+#   target        what native-like sounds like
+#   detection     "acoustic" (measured now), "planned" (needs forced alignment, v2),
+#                 or "self_reported" (triggered by your accent background)
+#   triggers      list; the module fires if ANY trigger matches:
+#                   { metric = "<key>", op = "<|<=|>|>=", value = <number> }
+#                   { accents = ["nze", "aue", "british", "indian"] }
+#   markers       acoustic markers, in words
+#   drills        [{ name, minutes, steps = [...] }]
+#   examples      example sentences
+#   words         key practice words / phrases (optional)
+#   progress      [{ metric?, text }] how you'll know it's working
+
+[[module]]
+id = "hrt"
+name = "High rising terminal (HRT)"
+priority = 1
+detection = "acoustic"
+description = """Rising pitch at the end of a statement sounds like a question to American listeners. \
+It signals uncertainty or a need for approval, and undercuts authority in meetings and interviews."""
+target = "Statements end with a clear fall in pitch onto the last stressed word (a 'nuclear fall'); rises are kept for real yes/no questions."
+markers = ["Pitch over the last 500 ms of a phrase rises by more than 10 Hz", "HRT share of phrase endings above 25%"]
+triggers = [{ metric = "hrt_rate", op = ">", value = 0.25 }]
+examples = [
+    "I finished the report on Friday.",
+    "We're meeting at three in the main conference room.",
+    "The numbers look good this quarter.",
+    "I grew up in Wellington, and I moved here two years ago.",
+    "That's the plan. Let me know if anything changes.",
+]
+
+[[module.drills]]
+name = "30-second self-audit"
+minutes = 3
+steps = [
+    "Record 30 seconds of yourself describing your morning.",
+    "Play it back and tally every phrase ending: rise or fall.",
+    "Write the count down (e.g. 6 rises / 4 falls); repeat daily and watch the ratio flip.",
+]
+
+[[module.drills]]
+name = "News anchor mode"
+minutes = 5
+steps = [
+    "Read a short news paragraph out loud as if you were a TV anchor.",
+    "Exaggerate the fall at every full stop: the last stressed syllable drops low and stays there.",
+    "Over three repetitions, keep the falls but let the exaggeration relax to natural.",
+]
+
+[[module.drills]]
+name = "Contrast pairs"
+minutes = 3
+steps = [
+    "Say the same sentence twice: first rising (as a question), then falling (as a statement).",
+    "'You're coming tomorrow?' vs 'You're coming tomorrow.'",
+    "Feel the difference in your throat and chin; aim for the falling version by default.",
+]
+
+[[module.drills]]
+name = "Full-stop hand chop"
+minutes = 2
+steps = [
+    "As you finish each statement, chop one hand down onto your desk or thigh.",
+    "Time the chop with the last stressed syllable; let your pitch follow your hand down.",
+    "Drop the gesture once the fall happens without it.",
+]
+
+[[module.progress]]
+metric = "hrt_rate"
+text = "HRT share of phrase endings at or below 25%"
+
+[[module.progress]]
+metric = "fall_rate"
+text = "Most phrase endings fall, and your falls are at least as big as your rises"
+
+[[module]]
+id = "range"
+name = "Pitch range and dynamic delivery"
+priority = 2
+detection = "acoustic"
+description = """American English uses a wide pitch range to mark emphasis and new information. \
+A narrow range sounds monotone, which American listeners hear as disengaged or non-native."""
+target = "A wide, energetic range: stressed words jump up, and the voice travels down across a phrase (p90/p10 ratio of 2.5x or more, std dev of 60 Hz or more)."
+markers = ["Range ratio (p90/p10 F0) below 2.5x", "F0 standard deviation below 60 Hz"]
+triggers = [
+    { metric = "range_ratio", op = "<", value = 2.5 },
+    { metric = "std_f0", op = "<", value = 60 },
+]
+examples = [
+    "I didn't say SHE stole it. (stress each word in turn and hear the meaning change)",
+    "That was the BEST pizza I've ever had.",
+    "Wait, you're moving to CHICAGO?",
+]
+
+[[module.drills]]
+name = "Siren"
+minutes = 2
+steps = [
+    "On an 'ng' or 'oo', glide from your lowest comfortable note to your highest and back.",
+    "Five slow sirens, then five fast ones.",
+    "Notice how much range you have; most speakers use a third of it.",
+]
+
+[[module.drills]]
+name = "Exaggerated stair-step intonation"
+minutes = 4
+steps = [
+    "Take a sentence like 'I really need to finish this today.'",
+    "Put each stressed word on a higher step, then walk down to a low finish.",
+    "Exaggerate twice, then say it naturally and keep about half the movement.",
+]
+
+[[module.drills]]
+name = "Staircase counting 1 to 5"
+minutes = 2
+steps = [
+    "Count 'one, two, three, four, five' with each number a clear step higher.",
+    "Then count back down, each a step lower, ending low on 'one'.",
+    "Repeat with days of the week.",
+]
+
+[[module.progress]]
+metric = "range_ratio"
+text = "Range ratio at or above 2.5x"
+
+[[module.progress]]
+metric = "std_f0"
+text = "F0 standard deviation at or above 60 Hz"
+
+[[module]]
+id = "onset"
+name = "Phrase onset height"
+priority = 3
+detection = "acoustic"
+description = """American speakers launch each new phrase high after a pause, then step down through it. \
+Starting phrases low or mid-height flattens the whole contour and makes falls hard to hear."""
+target = "At least 40% of phrases start more than 15% above your mean pitch; no more than 20% start low."
+markers = ["HIGH onsets (first 500 ms > 1.15x mean F0) below 30%", "LOW onsets (< 0.9x mean F0) above 40%"]
+triggers = [
+    { metric = "high_onset_rate", op = "<", value = 0.30 },
+    { metric = "low_onset_rate", op = ">", value = 0.40 },
+]
+examples = [
+    "So | here's what happened.",
+    "Honestly | I think we should wait.",
+    "Okay | let's get started.",
+]
+
+[[module.drills]]
+name = "1-second pause rule"
+minutes = 3
+steps = [
+    "Read a paragraph, pausing for a full second at every comma and full stop.",
+    "After each pause, push the first stressed word UP before continuing.",
+    "Shorten the pauses gradually while keeping the high launch.",
+]
+
+[[module.drills]]
+name = "Announcement voice"
+minutes = 2
+steps = [
+    "Say 'Attention, passengers', 'Good morning, everyone', 'Hi, how are you?' as if announcing.",
+    "Notice the high start; carry that launch into normal sentences.",
+]
+
+[[module.drills]]
+name = "Two-handed pitch mapping"
+minutes = 3
+steps = [
+    "Hold one hand high and one low in front of you.",
+    "Start each phrase at the high hand, trace down toward the low hand by the end.",
+    "Reset to the high hand after every pause.",
+]
+
+[[module.progress]]
+metric = "high_onset_rate"
+text = "HIGH onsets at or above 40%"
+
+[[module.progress]]
+metric = "low_onset_rate"
+text = "LOW onsets at or below 20%"
+
+[[module]]
+id = "tflap"
+name = "T-flapping (intervocalic voicing)"
+priority = 4
+detection = "planned"
+description = """Between vowels, American English turns /t/ into a quick voiced tap, close to a soft 'd'. \
+A crisp, aspirated /t/ in 'water' or 'better' is one of the most noticeable non-American markers."""
+target = "'butter' sounds like 'budder', 'water' like 'wader', 'get it' like 'ge-dit': the tongue taps once without stopping the voice."
+markers = ["Planned (v2): voicing continuity through intervocalic /t/ located by forced alignment"]
+triggers = [{ accents = ["nze", "aue", "british", "indian"] }]
+words = [
+    "water", "better", "letter", "little", "butter", "city", "pretty", "getting", "meeting", "later",
+    "matter", "forty", "ninety", "writer", "setting", "waiting", "beating", "latter", "otter", "gotta",
+    "get it", "put it", "what about", "a lot of",
+]
+examples = [
+    "Put a little water in the kettle.",
+    "It's getting better later in the city.",
+    "What about a lot of butter?",
+]
+
+[[module.drills]]
+name = "Flap ladder"
+minutes = 4
+steps = [
+    "Say 'ladder', then 'latter': they should sound the same.",
+    "Work through the top 20 words, three times each, tongue tip tapping once behind the top teeth.",
+    "Keep your voice buzzing through the tap; don't stop the air.",
+]
+
+[[module.drills]]
+name = "Cross-boundary links"
+minutes = 3
+steps = [
+    "'get it' -> 'ge-dit', 'put it' -> 'pu-dit', 'what about' -> 'wha-da-bout', 'a lot of' -> 'a lo-da'.",
+    "Say each slowly, then at full speed in a sentence.",
+]
+
+[[module.progress]]
+text = "Flapped /t/ in the top 20 words when reading the example sentences aloud (self-check by recording)"
+
+[[module]]
+id = "dark_l"
+name = "Dark /l/"
+priority = 6
+detection = "planned"
+description = """American /l/ at the end of a syllable is 'dark': the back of the tongue rises toward the soft palate. \
+A light, forward /l/ in 'milk' or 'feel' sounds clipped and foreign."""
+target = "Syllable-final /l/ with the tongue tip touching the ridge AND the back of the tongue raised, giving a hollow 'uhl' color."
+markers = ["Planned (v2): F2 lowering at syllable-final /l/"]
+triggers = [{ accents = ["indian", "british"] }]
+words = ["milk", "film", "help", "cold", "world", "build", "feel", "real", "all", "ball"]
+examples = ["I feel like a cold glass of milk.", "We'll build it all by fall."]
+
+[[module.drills]]
+name = "Tip-and-back"
+minutes = 3
+steps = [
+    "Say 'ball' slowly. Keep the tongue tip on the ridge behind your teeth.",
+    "At the same time, pull the back of your tongue up and back as if starting a 'w'.",
+    "Repeat with each key word, then in the example sentences.",
+]
+
+[[module.progress]]
+text = "Key words recorded with a dark, hollow /l/ (self-check)"
+
+[[module]]
+id = "vowels"
+name = "NZE / AuE vowel shift"
+priority = 5
+detection = "self_reported"
+description = """New Zealand and Australian vowels sit in different places from American ones: \
+KIT is centralized ('fush and chups'), DRESS and TRAP are raised. Americans may mishear 'pen' as 'pin' or 'bad' as 'bed'."""
+target = "KIT short and front, DRESS mid, TRAP open with a wide jaw, NURSE fully rhotic."
+markers = ["Planned (v2): F1/F2 vowel space for KIT, DRESS and TRAP"]
+triggers = [{ accents = ["nze", "aue"] }]
+words = [
+    "KIT: fish, chip, fit, bit, pin, six",
+    "DRESS: pen, bed, dress, head",
+    "TRAP: bad, hand, cat, map",
+    "NURSE: bird, word, learn, work",
+]
+examples = ["Six fish and chips, please.", "The pen is on the bed.", "That cat has a bad hand.", "I learned a word at work."]
+
+[[module.drills]]
+name = "Minimal-pair ladder"
+minutes = 4
+steps = [
+    "Read across: pin / pen / pan, bit / bet / bat, fit / fet / fat.",
+    "Open the jaw a little more at each step; TRAP needs a dropped jaw.",
+    "Record and check the three words in each row sound clearly different.",
+]
+
+[[module.drills]]
+name = "KIT front"
+minutes = 2
+steps = [
+    "Smile slightly and keep the tongue high and forward for 'fish', 'chip', 'six'.",
+    "Contrast with your natural version until 'fish' never drifts toward 'fush'.",
+]
+
+[[module.progress]]
+text = "pin / pen / pan clearly distinct in a recording (self-check)"
+
+[[module]]
+id = "rhotic"
+name = "Rhoticity (post-vocalic /r/)"
+priority = 4
+detection = "planned"
+description = """American English pronounces /r/ after vowels ('car', 'bird', 'water'). \
+Dropping it is the single strongest cue to a non-American accent."""
+target = "The tongue curls back (or bunches) during the vowel, not just at the end; the /r/ colors the whole vowel."
+markers = ["Planned (v2): F3 lowering below ~2000 Hz on post-vocalic /r/"]
+triggers = [{ accents = ["nze", "aue", "british"] }]
+words = ["car", "store", "bird", "world", "morning", "better", "water", "computer"]
+examples = ["Park the car near the store.", "The bird was singing all morning.", "My computer works better after a restart."]
+
+[[module.drills]]
+name = "Growl the vowel"
+minutes = 3
+steps = [
+    "Say 'errrr' and hold it; feel the tongue pulled back and the lips slightly rounded.",
+    "Start each key word from that position: 'b-errr-d', 'c-arrr'.",
+    "Shorten the growl until the /r/ is present but natural.",
+]
+
+[[module.progress]]
+text = "Every post-vocalic /r/ audible in the key words (self-check)"
+
+[[module]]
+id = "connected"
+name = "Connected speech"
+priority = 3
+detection = "acoustic"
+description = """Americans link words into continuous streams, reduce unstressed vowels to schwa and use contractions. \
+Choppy word-by-word delivery sounds careful and non-native."""
+target = "Voicing flows through phrases (60–80% voiced) with natural pauses only at phrase boundaries."
+markers = ["Voiced ratio below 50%"]
+triggers = [{ metric = "voiced_ratio", op = "<", value = 0.50 }]
+words = ["gonna", "wanna", "gotta", "kinda", "lemme", "dunno", "did you -> didja", "what are you -> whatcha"]
+examples = [
+    "I'm gonna grab a coffee. Wanna come?",
+    "What are you doing later? (whatcha doin' later?)",
+    "Let me know if you need anything.",
+]
+
+[[module.drills]]
+name = "Linking chains"
+minutes = 3
+steps = [
+    "Join consonant to vowel across words: 'turn_it_off', 'pick_it_up', 'an_apple'.",
+    "Read a sentence with no gaps at all, then add pauses only at commas.",
+]
+
+[[module.drills]]
+name = "Schwa squeeze"
+minutes = 3
+steps = [
+    "Mark the stressed syllables in a sentence; every other vowel becomes a quick 'uh'.",
+    "'I want to go to the store' -> 'I wanna go tuh thuh STORE'.",
+]
+
+[[module.progress]]
+metric = "voiced_ratio"
+text = "Voiced ratio between 60% and 80%"
+
+[[module]]
+id = "lexical"
+name = "Vocabulary swaps"
+priority = 7
+detection = "self_reported"
+description = """Some everyday words differ between Commonwealth and American English. \
+Using the American word removes a small but constant reminder that you're not from here."""
+target = "Reach for the American word first in everyday conversation."
+markers = ["Not measured from audio"]
+triggers = [{ accents = ["nze", "aue", "british", "indian"] }]
+words = [
+    "footpath -> sidewalk", "lift -> elevator", "boot -> trunk", "chemist -> pharmacy",
+    "biscuit -> cookie", "lollies / sweets -> candy", "jumper -> sweater", "petrol -> gas",
+    "rubbish -> trash", "queue -> line", "holiday -> vacation", "flat -> apartment",
+]
+examples = ["I left my sweater in the trunk.", "Grab some candy at the pharmacy on the way back."]
+
+[[module.drills]]
+name = "Swap of the day"
+minutes = 1
+steps = [
+    "Pick one swap each morning and use it at least three times that day.",
+    "Note any moment you used the old word and say the sentence again with the new one.",
+]
+
+[[module.progress]]
+text = "Using the American word without having to think about it (self-check)"

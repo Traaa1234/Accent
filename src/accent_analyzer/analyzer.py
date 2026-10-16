@@ -12,6 +12,8 @@ import click
 from accent_analyzer.analysis import AudioLoadError
 from accent_analyzer.analysis.pipeline import AnalysisResult, analyze_file
 from accent_analyzer.analysis.pitch import DEFAULT_F0_MAX, DEFAULT_F0_MIN
+from accent_analyzer.coaching import ACCENTS, load_library, recommend
+from accent_analyzer.coaching.report import write_coaching_html
 from accent_analyzer.history import HistoryStore, progression
 from accent_analyzer.reports import FORMATS, write_report
 from accent_analyzer.targets import TARGETS, Status
@@ -92,6 +94,43 @@ def _print_progress(progress: list, n_records: int) -> None:
         click.echo(f"  [{_SEVERITY_MARK[f.severity]}] {f.message}")
 
 
+def _print_coaching(recs: list, detailed: bool = False) -> None:
+    click.echo("\nCoaching focus" if not detailed else "")
+    if not recs:
+        click.echo("  No coaching modules triggered.")
+    for i, r in enumerate(recs, start=1):
+        m = r.module
+        flag = " [provisional]" if r.provisional else ""
+        click.echo(f"  {i}. {m.name}{flag} — {'; '.join(r.reasons)}")
+        if not detailed:
+            if m.drills:
+                click.echo(f"     Start with: {m.drills[0].name}")
+            continue
+        click.echo(f"     {m.description}")
+        click.echo(f"     Target: {m.target}")
+        for d in m.drills:
+            mins = f" ({d.minutes} min)" if d.minutes else ""
+            click.echo(f"     - {d.name}{mins}")
+            for step in d.steps:
+                click.echo(f"         {step}")
+        if m.examples:
+            click.echo("     Practice: " + " | ".join(m.examples))
+        if m.words:
+            click.echo("     Key words: " + ", ".join(m.words))
+        for p in r.progress:
+            cur = p.get("current")
+            extra = ", ".join(f"{k} {p[k]}" for k in ("previous", "best") if p.get(k))
+            value = f" — now {cur}" + (f" ({extra})" if extra else "") if cur else ""
+            mark = "✓" if p.get("on_target") else "○"
+            click.echo(f"     {mark} {p['text']}{value}")
+        click.echo("")
+
+
+ACCENT_OPTION = click.option(
+    "--accent", type=click.Choice(ACCENTS),
+    help="Your English background; adds accent-specific modules (remembered in history).",
+)
+
 HISTORY_OPTION = click.option(
     "--history", "history_path", type=click.Path(dir_okay=False), envvar="ACCENT_HISTORY",
     help="SQLite history file (or set ACCENT_HISTORY).",
@@ -129,10 +168,11 @@ def cli() -> None:
 )
 @click.option("--trajectory", "trajectory_n", type=int, default=10, show_default=True,
               help="Recordings shown in the report's trajectory.")
+@ACCENT_OPTION
 def analyze(
     path: str, pitch_method: str, f0_min: float, f0_max: float, as_json: bool,
     outputs: tuple[str, ...], name: str | None, history_path: str | None, session: str | None,
-    recorded_at: datetime | None, trajectory_n: int,
+    recorded_at: datetime | None, trajectory_n: int, accent: str | None,
 ) -> None:
     """Analyze a recording (.m4a, .mp3, .wav, .flac)."""
     for out in outputs:
@@ -146,7 +186,9 @@ def analyze(
     history, progress, record, n_records = None, None, None, 0
     if history_path:
         with HistoryStore(history_path) as store:
-            record = store.add(result, name=name, session=session, recorded_at=recorded_at)
+            if accent is None:  # remembered from the latest recording
+                accent = next((r.accent for r in reversed(store.all()) if r.accent), None)
+            record = store.add(result, name=name, session=session, recorded_at=recorded_at, accent=accent)
             # Rules judge the new recording against everything recorded up to it.
             records = [r for r in store.all() if r.recorded_at <= record.recorded_at]
             progress = progression(records)
@@ -155,8 +197,10 @@ def analyze(
             ]
             n_records = len(store)
 
+    recs = recommend(result.metrics(), accent=accent, history=history)
     for out in outputs:
-        written = write_report(result, out, title=name, history=history, progress=progress)
+        written = write_report(result, out, title=name, history=history, progress=progress,
+                               recommendations=[r.to_report_dict() for r in recs])
         click.echo(f"Report written: {written}", err=as_json)
 
     if as_json:
@@ -166,11 +210,14 @@ def analyze(
                 "record_id": record.id, "session": record.session, "take": record.take,
                 "progress": [f.to_dict() for f in progress],
             }
+        data["accent"] = accent
+        data["recommendations"] = [r.to_dict() for r in recs]
         click.echo(json.dumps(_json_safe(data), indent=2))
     else:
         _print_report(result)
         if record is not None:
             _print_progress(progress, n_records)
+        _print_coaching(recs)
 
 
 _HISTORY_COLUMNS = (
@@ -216,6 +263,45 @@ def history_cmd(history_path: str | None, last_n: int, as_json: bool) -> None:
         name = (r.name or Path(r.source or "").name)[:21]
         click.echo(f"{r.id:>4}  {r.recorded_at:%Y-%m-%d %H:%M}  {name:<22}{r.take:>5}{cells}")
     _print_progress(progress, len(all_records))
+
+
+@cli.command()
+@HISTORY_OPTION
+@ACCENT_OPTION
+@click.option("--focus", type=click.Choice(sorted(load_library())), help="Show only this module.")
+@click.option("--limit", type=int, default=4, show_default=True, help="Maximum modules (0 = all triggered).")
+@click.option("--last", "last_n", type=int, default=10, show_default=True,
+              help="Recordings used for previous/best progress values.")
+@click.option("--json", "as_json", is_flag=True, help="Print the plan as JSON.")
+@click.option("--output", "-o", type=click.Path(dir_okay=False), help="Also write the plan as HTML.")
+def coach(history_path: str | None, accent: str | None, focus: str | None, limit: int, last_n: int,
+          as_json: bool, output: str | None) -> None:
+    """Coaching plan for your latest recording in the history."""
+    if not history_path:
+        raise click.UsageError("Give --history PATH or set ACCENT_HISTORY.")
+    if not Path(history_path).expanduser().exists():
+        raise click.ClickException(f"No history file at {history_path}")
+    with HistoryStore(history_path) as store:
+        records = store.all()
+    if not records:
+        raise click.ClickException("History is empty; analyze a recording with --history first.")
+    latest = records[-1]
+    accent = accent or next((r.accent for r in reversed(records) if r.accent), None)
+    rows = [{k: r.get(k) for k in r.metrics} for r in records[-last_n:]]
+    recs = recommend({k: latest.get(k) for k in latest.metrics}, accent=accent,
+                     focus=focus, limit=limit or None, history=rows)
+    if output:
+        written = write_coaching_html(recs, latest, accent, output)
+        click.echo(f"Coaching plan written: {written}", err=as_json)
+    if as_json:
+        click.echo(json.dumps(_json_safe({
+            "recording": latest.to_dict(), "accent": accent,
+            "recommendations": [r.to_dict() for r in recs],
+        }), indent=2))
+        return
+    click.echo(f"Coaching plan for {latest.label} ({latest.recorded_at:%Y-%m-%d}), "
+               f"accent: {accent or 'not set (use --accent)'}")
+    _print_coaching(recs, detailed=True)
 
 
 if __name__ == "__main__":

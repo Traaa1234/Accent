@@ -75,7 +75,14 @@ ul.findings li:last-child { border-bottom: 0; }
 .sev.warning { color: var(--warn); background: var(--warn-bg); }
 .sev.info { color: var(--muted); border: 1px solid var(--grid); }
 .rec h3 { font-size: 15px; margin: 16px 0 4px; }
+.rec { padding-bottom: 8px; border-bottom: 1px solid var(--grid); }
+.rec:last-child { border-bottom: 0; }
 .rec ol { margin: 4px 0 0; padding-left: 20px; }
+.rec ol li { margin-bottom: 4px; }
+.rec .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; margin: 12px 0 4px; }
+ul.examples { margin: 0; padding-left: 20px; color: var(--ink-2); }
+.words { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.words span { border: 1px solid var(--grid); border-radius: 999px; padding: 1px 9px; font-size: 13px; }
 footer { color: var(--muted); font-size: 12px; margin-top: 24px; }
 @media (max-width: 560px) {
   section { padding: 14px; }
@@ -164,18 +171,37 @@ def _findings_html(findings) -> str:
 
 
 
+def _drill_html(d) -> str:
+    if isinstance(d, str):
+        return f"<li>{escape(d)}</li>"
+    steps = " ".join(d.get("steps", []))
+    mins = f" · {d['minutes']} min" if d.get("minutes") else ""
+    return f"<li><strong>{escape(d['name'])}</strong>{mins}. {escape(steps)}</li>"
+
+
 def _recommendations_html(recommendations: list[dict] | None) -> str:
+    if recommendations is None:
+        return "<p class='meta'>Coaching recommendations were not generated for this report.</p>"
     if not recommendations:
-        return "<p class='meta'>No coaching modules triggered.</p>" if recommendations == [] else (
-            "<p class='meta'>The coaching library is not connected yet; see the findings above.</p>"
-        )
+        return "<p class='meta'>No coaching modules triggered. Keep recording to confirm the pattern holds.</p>"
     blocks = []
-    for rec in recommendations:
-        drills = "".join(f"<li>{escape(d)}</li>" for d in rec.get("drills", []))
-        blocks.append(
-            f"<div class='rec'><h3>{escape(rec['title'])}</h3><p>{escape(rec.get('why', ''))}</p>"
-            + (f"<ol>{drills}</ol>" if drills else "") + "</div>"
-        )
+    for i, rec in enumerate(recommendations, start=1):
+        parts = [f"<div class='rec'><h3>{i}. {escape(rec['title'])}</h3><p>{escape(rec.get('why', ''))}</p>"]
+        if rec.get("target"):
+            parts.append(f"<p><strong>Target:</strong> {escape(rec['target'])}</p>")
+        if rec.get("drills"):
+            parts.append("<ol>" + "".join(_drill_html(d) for d in rec["drills"]) + "</ol>")
+        if rec.get("examples"):
+            parts.append("<p class='label'>Practice sentences</p><ul class='examples'>"
+                         + "".join(f"<li>{escape(e)}</li>" for e in rec["examples"]) + "</ul>")
+        if rec.get("words"):
+            parts.append("<p class='label'>Key words</p><p class='words'>"
+                         + "".join(f"<span>{escape(w)}</span>" for w in rec["words"]) + "</p>")
+        if rec.get("progress"):
+            parts.append("<p class='label'>Progress indicators</p><ul class='examples'>"
+                         + "".join(f"<li>{escape(x)}</li>" for x in rec["progress"]) + "</ul>")
+        parts.append("</div>")
+        blocks.append("".join(parts))
     return "".join(blocks)
 
 

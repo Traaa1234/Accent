@@ -17,7 +17,8 @@ src/accent_analyzer/
   reports/             charts.py (matplotlib, light + dark), verdict.py (headline + scorecard),
                        html_report.py (self-contained HTML), pdf_report.py (reportlab)
   history/             store.py (SQLite, one row per recording), progression.py (multi-recording rules)
-  coaching/            [5] module library (data, not code) + recommendation engine
+  coaching/            modules.toml (content + declarative triggers), library.py (loader/validation),
+                       engine.py (ranking), report.py (standalone coaching plan HTML)
   dashboard/           [6] static HTML dashboard generated from history
 tests/
   synth.py             synthetic harmonic signals with known F0 contours
@@ -39,7 +40,7 @@ re-run DSP.
 4. **History** — done. SQLite (`recordings` table + JSON blob of distributions), trajectory
    queries, register-deflation / complacency-regression / integration-milestone /
    fatigue flags.
-5. **Coaching**: the 9 modules as structured data with trigger predicates on
+5. **Coaching** — done. The 9 modules as structured data with trigger predicates on
    `AnalysisResult`; engine ranks triggered modules by distance from target.
 6. **Dashboard**: HRT/falls trajectory, mean-F0 bars, radar vs best-ever, sortable table.
 7. **Later**: shadowing (DTW-aligned contour correlation), A/B mode, daily drill tracker.
@@ -89,6 +90,10 @@ detection.
   last 10 recordings with 10+ phrase endings and "controlled" = HRT ≤ 25% in at least
   half of a register's recordings; a breakthrough is any recording with HRT ≤ 25%.
   All are constants at the top of `history/progression.py`.
+
+* **Segmental modules are accent-triggered in v1.** Which accents trigger T-flapping,
+  dark /l/ and rhoticity is my judgement (e.g. NZE/AuE are non-rhotic; Indian and
+  British speakers more often keep a light /l/); it's one line per module in the TOML.
 
 ## Known calibration risks
 

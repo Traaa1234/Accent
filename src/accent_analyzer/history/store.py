@@ -70,6 +70,10 @@ class Record:
     details: dict = field(repr=False)
 
     @property
+    def accent(self) -> str | None:
+        return self.details.get("accent")
+
+    @property
     def label(self) -> str:
         return self.name or f"{self.recorded_at:%Y-%m-%d %H:%M}"
 
@@ -136,6 +140,7 @@ class HistoryStore:
         name: str | None = None,
         session: str | None = None,
         recorded_at: datetime | None = None,
+        accent: str | None = None,
     ) -> Record:
         recorded_at = recorded_at or datetime.now()
         session = session or f"{recorded_at:%Y-%m-%d}"
@@ -154,7 +159,7 @@ class HistoryStore:
                 recorded_at.isoformat(timespec="seconds"), name, session, take, result.source,
                 result.duration, result.track.method, result.register_label,
                 *(metrics.get(c) for c in COLUMNS),
-                json.dumps(metrics), json.dumps(_clean(_details(result))),
+                json.dumps(metrics), json.dumps(_clean({**_details(result), "accent": accent})),
             ),
         )
         self._conn.commit()

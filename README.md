@@ -5,9 +5,9 @@ training toward a General American accent. It measures intonation (pitch registe
 range, phrase-final rises/falls, phrase onsets) and maps off-target metrics to
 coaching drills.
 
-**Status:** deliverables 1–4 of 6: audio pipeline, F0 extraction, register metrics,
+**Status:** deliverables 1–5 of 6: audio pipeline, F0 extraction, register metrics,
 phrase-ending (HRT) and onset analysis, 3-second window movement, HTML/PDF reports,
-session history with progression warnings.
+session history with progression warnings, coaching library and recommendations.
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## Setup
@@ -21,6 +21,8 @@ uv run accent-analyzer analyze recording.m4a --json
 uv run accent-analyzer analyze recording.m4a --name "Monday morning" -o report.html -o report.pdf
 uv run accent-analyzer analyze recording.m4a --name "Monday morning" --history ~/.accent_history.db
 uv run accent-analyzer history --history ~/.accent_history.db --last 10
+uv run accent-analyzer analyze recording.m4a --accent nze --history ~/.accent_history.db
+uv run accent-analyzer coach --history ~/.accent_history.db --focus hrt -o plan.html
 uv run accent-analyzer analyze recording.m4a --pitch-method yin --f0-min 70 --f0-max 260
 ```
 
@@ -73,6 +75,30 @@ recordings. After each analysis, and in `accent-analyzer history`, these rules r
 | Integration milestone | HRT < 25%, HIGH onsets > 40%, range > 2.6× in one recording (first / repeat) |
 | Fatigue | latest take in a session worse than take 1 on 2+ of: HRT +15 pts, HIGH onsets −15 pts, range −0.3×, std −15 Hz, mean F0 −20 Hz |
 | Register-independent HRT | HRT ≤ 25% in most animated (> 180 Hz) *and* calm (< 160 Hz) recordings = robust; animated only = fragile (last 10 recordings with 10+ endings) |
+
+## Coaching
+
+Nine modules live in [`src/accent_analyzer/coaching/modules.toml`](src/accent_analyzer/coaching/modules.toml),
+each with a description, target, triggers, drills, practice sentences, key words and
+progress indicators. Edit the file to change content or thresholds; no code changes needed.
+
+| Module | Triggered by |
+|---|---|
+| HRT | HRT > 25% |
+| Pitch range | range ratio < 2.5× or std dev < 60 Hz |
+| Phrase onset height | HIGH onsets < 30% or LOW onsets > 40% |
+| Connected speech | voiced ratio < 50% |
+| T-flapping | accent: NZE, AuE, British, Indian (audio detection planned for v2) |
+| Rhoticity | accent: NZE, AuE, British (audio detection planned for v2) |
+| Dark /l/ | accent: Indian, British (audio detection planned for v2) |
+| NZE/AuE vowel shift | accent: NZE, AuE |
+| Vocabulary swaps | accent: NZE, AuE, British, Indian |
+
+Measured problems rank first, by how far past the threshold the metric is; accent-based
+modules follow. HRT and onset modules are marked *provisional* when fewer than 10
+phrase endings were measurable. `--accent` is remembered in the history, so set it once.
+`analyze` shows the top 4 and puts them in the report; `coach` gives the full plan with
+current / previous / best values for each progress indicator.
 
 ## Tests
 
