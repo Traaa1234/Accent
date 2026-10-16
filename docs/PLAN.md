@@ -30,7 +30,7 @@ re-run DSP.
 
 1. **Core pipeline + F0 + basic metrics** — done.
 2. **Phrasing** — done. Pause runs from F0=0, adaptive threshold (report both 0.20s and
-   0.12s results), phrase-end Δ over last 500 ms (first-third vs last-third mean),
+   0.12s results), phrase-end Δ over last 500 ms (first-third vs last-third median),
    Rising/Falling/Level + BIG/MOD/Small, HRT%, onset ratio HIGH/MID/LOW,
    3 s window slopes. Fixtures: NZE-like, AmE-like, short clip, continuous speech.
 3. **Reports**: headline verdict, scorecard, contour, phrase-end histogram,
