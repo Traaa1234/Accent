@@ -132,3 +132,9 @@ def headline(result) -> str:
             "as indicative; record at least a minute of speech for a reliable reading."
         )
     return " ".join(parts)
+
+
+def own_findings(result, progress) -> list:
+    """Per-recording findings, minus any that a progression finding restates with history context."""
+    covered = {f.code for f in progress or []}
+    return [f for f in result.findings if f.code not in covered]

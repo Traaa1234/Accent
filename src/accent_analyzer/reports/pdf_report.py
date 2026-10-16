@@ -26,7 +26,7 @@ from reportlab.platypus import (
 
 from accent_analyzer.reports import charts
 from accent_analyzer.reports.theme import LIGHT
-from accent_analyzer.reports.verdict import headline, scorecard
+from accent_analyzer.reports.verdict import headline, own_findings, scorecard
 from accent_analyzer.targets import Status
 
 _FONT = "DejaVuSans"
@@ -88,7 +88,7 @@ def _scorecard_table(result, width: float) -> Table:
 
 
 def build_pdf(result, title: str | None = None, history: list[dict] | None = None,
-              recommendations: list[dict] | None = None) -> bytes:
+              recommendations: list[dict] | None = None, progress: list | None = None) -> bytes:
     _register_fonts()
     st = _styles()
     buf = io.BytesIO()
@@ -114,12 +114,17 @@ def build_pdf(result, title: str | None = None, history: list[dict] | None = Non
         ("Phrase onsets", charts.onset_breakdown, result),
     ):
         story.append(KeepTogether([Paragraph(heading, st["h2"]), _image(fn(data, LIGHT), width)]))
-    if history and len(history) >= 2:
-        story.append(KeepTogether([Paragraph("Compared with previous sessions", st["h2"]),
-                                   _image(charts.trajectory(history, LIGHT), width)]))
+    if (history and len(history) >= 2) or progress:
+        block = [Paragraph("Compared with previous sessions", st["h2"])]
+        if history and len(history) >= 2:
+            block.append(_image(charts.trajectory(history, LIGHT), width))
+        for f in progress or []:
+            block.append(Paragraph(escape(f"{_SEVERITY_ICON[f.severity]}  {f.message}"), st["body"]))
+            block.append(Spacer(1, 3))
+        story.append(KeepTogether(block))
 
     story.append(Paragraph("Findings", st["h2"]))
-    for f in result.findings:
+    for f in own_findings(result, progress):
         story.append(Paragraph(escape(f"{_SEVERITY_ICON[f.severity]}  {f.message}"), st["body"]))
         story.append(Spacer(1, 3))
 

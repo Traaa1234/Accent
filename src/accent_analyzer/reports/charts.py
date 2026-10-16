@@ -221,7 +221,11 @@ def trajectory(history: list[dict], theme: Theme) -> bytes:
         target = TARGETS.get(key)
         if target:
             lo = target.low if target.low is not None else 0
-            hi = target.high if target.high is not None else np.nanmax(vals) * 1.2 if np.isfinite(vals).any() else lo
+            if target.high is not None:
+                hi = target.high
+            else:  # open-ended target: shade comfortably past the data so the band reads as a zone
+                peak = np.nanmax(vals) if np.isfinite(vals).any() else lo
+                hi = max(lo * 1.3, peak * 1.15)
             ax.axhspan(lo * scale, hi * scale, color=theme.band, linewidth=0, zorder=0)
         ax.plot(x, vals * scale, color=theme.series, linewidth=2, marker="o", markersize=4, zorder=2)
         if np.isfinite(vals[-1]):
@@ -233,7 +237,5 @@ def trajectory(history: list[dict], theme: Theme) -> bytes:
         ax.set_title(label, fontsize=8.5, color=theme.ink_secondary, loc="left")
         ax.set_xticks(x if len(x) <= 10 else x[:: max(1, len(x) // 6)])
         ax.margins(x=0.15, y=0.25)
-    fig.suptitle("Trajectory across sessions (latest on the right)", x=0.01, ha="left",
-                 fontsize=10, color=theme.ink, fontweight="bold")
     fig.tight_layout()
     return _png(fig)

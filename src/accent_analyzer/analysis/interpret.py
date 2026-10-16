@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from accent_analyzer.analysis.pipeline import AnalysisResult
 
 Severity = Literal["good", "info", "warning"]
-Axis = Literal["foundation", "direction", "data"]
+Axis = Literal["foundation", "direction", "data", "progress"]
 
 MIN_RELIABLE_ENDS = 10
 ANIMATED_F0 = 180.0

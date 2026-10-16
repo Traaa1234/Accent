@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -12,6 +12,7 @@ import click
 from accent_analyzer.analysis import AudioLoadError
 from accent_analyzer.analysis.pipeline import AnalysisResult, analyze_file
 from accent_analyzer.analysis.pitch import DEFAULT_F0_MAX, DEFAULT_F0_MIN
+from accent_analyzer.history import HistoryStore, progression
 from accent_analyzer.reports import FORMATS, write_report
 from accent_analyzer.targets import TARGETS, Status
 
@@ -83,6 +84,20 @@ def _print_report(r: AnalysisResult) -> None:
         echo(f"  [{_SEVERITY_MARK[f.severity]}] {f.message}")
 
 
+def _print_progress(progress: list, n_records: int) -> None:
+    click.echo(f"\nProgress  ({n_records} recordings in history)")
+    if not progress:
+        click.echo("  No progression flags.")
+    for f in progress:
+        click.echo(f"  [{_SEVERITY_MARK[f.severity]}] {f.message}")
+
+
+HISTORY_OPTION = click.option(
+    "--history", "history_path", type=click.Path(dir_okay=False), envvar="ACCENT_HISTORY",
+    help="SQLite history file (or set ACCENT_HISTORY).",
+)
+
+
 @click.group()
 @click.version_option(package_name="accent-analyzer")
 def cli() -> None:
@@ -105,10 +120,19 @@ def cli() -> None:
     "--output", "-o", "outputs", multiple=True, type=click.Path(dir_okay=False),
     help="Write a report; format from extension (.html or .pdf). Repeatable.",
 )
-@click.option("--name", help="Title for the report (defaults to the file name).")
+@click.option("--name", help="Label for this recording in reports and history (defaults to the file name).")
+@HISTORY_OPTION
+@click.option("--session", help="Group takes into a session for fatigue checks (default: recording date).")
+@click.option(
+    "--date", "recorded_at", help="When it was recorded, e.g. '2026-10-16 08:30' (default: now).",
+    type=click.DateTime(["%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"]),
+)
+@click.option("--trajectory", "trajectory_n", type=int, default=10, show_default=True,
+              help="Recordings shown in the report's trajectory.")
 def analyze(
     path: str, pitch_method: str, f0_min: float, f0_max: float, as_json: bool,
-    outputs: tuple[str, ...], name: str | None,
+    outputs: tuple[str, ...], name: str | None, history_path: str | None, session: str | None,
+    recorded_at: datetime | None, trajectory_n: int,
 ) -> None:
     """Analyze a recording (.m4a, .mp3, .wav, .flac)."""
     for out in outputs:
@@ -119,14 +143,79 @@ def analyze(
     except (AudioLoadError, NotImplementedError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
 
+    history, progress, record, n_records = None, None, None, 0
+    if history_path:
+        with HistoryStore(history_path) as store:
+            record = store.add(result, name=name, session=session, recorded_at=recorded_at)
+            # Rules judge the new recording against everything recorded up to it.
+            records = [r for r in store.all() if r.recorded_at <= record.recorded_at]
+            progress = progression(records)
+            history = [
+                {"label": r.label, **{k: r.get(k) for k in r.metrics}} for r in records[-trajectory_n:]
+            ]
+            n_records = len(store)
+
     for out in outputs:
-        written = write_report(result, out, title=name)
+        written = write_report(result, out, title=name, history=history, progress=progress)
         click.echo(f"Report written: {written}", err=as_json)
 
     if as_json:
-        click.echo(json.dumps(_json_safe(result.to_dict()), indent=2))
+        data = result.to_dict()
+        if record is not None:
+            data["history"] = {
+                "record_id": record.id, "session": record.session, "take": record.take,
+                "progress": [f.to_dict() for f in progress],
+            }
+        click.echo(json.dumps(_json_safe(data), indent=2))
     else:
         _print_report(result)
+        if record is not None:
+            _print_progress(progress, n_records)
+
+
+_HISTORY_COLUMNS = (
+    ("HRT", "hrt_rate", lambda v: f"{v:.0%}"),
+    ("Falls", "fall_rate", lambda v: f"{v:.0%}"),
+    ("Mean F0", "mean_f0", lambda v: f"{v:.0f}"),
+    ("Std", "std_f0", lambda v: f"{v:.0f}"),
+    ("Range", "range_ratio", lambda v: f"{v:.2f}×"),
+    ("Voiced", "voiced_ratio", lambda v: f"{v:.0%}"),
+    ("HIGH on", "high_onset_rate", lambda v: f"{v:.0%}"),
+)
+
+
+@cli.command(name="history")
+@HISTORY_OPTION
+@click.option("--last", "last_n", type=int, default=10, show_default=True, help="Number of recordings.")
+@click.option("--json", "as_json", is_flag=True, help="Print the trajectory as JSON.")
+def history_cmd(history_path: str | None, last_n: int, as_json: bool) -> None:
+    """Show the trajectory over recent recordings and any progression flags."""
+    if not history_path:
+        raise click.UsageError("Give --history PATH or set ACCENT_HISTORY.")
+    if not Path(history_path).expanduser().exists():
+        raise click.ClickException(f"No history file at {history_path}")
+    with HistoryStore(history_path) as store:
+        all_records = store.all()
+    records = all_records[-last_n:]
+    progress = progression(all_records)
+    if as_json:
+        click.echo(json.dumps(_json_safe({
+            "recordings": [r.to_dict() for r in records],
+            "progress": [f.to_dict() for f in progress],
+        }), indent=2))
+        return
+    if not records:
+        click.echo("History is empty.")
+        return
+    header = f"{'#':>4}  {'Recorded':<16}  {'Name':<22}{'Take':>5}" + "".join(f"{c[0]:>9}" for c in _HISTORY_COLUMNS)
+    click.echo(header)
+    for r in records:
+        cells = "".join(
+            f"{'n/a' if math.isnan(r.get(k)) else fmt(r.get(k)):>9}" for _, k, fmt in _HISTORY_COLUMNS
+        )
+        name = (r.name or Path(r.source or "").name)[:21]
+        click.echo(f"{r.id:>4}  {r.recorded_at:%Y-%m-%d %H:%M}  {name:<22}{r.take:>5}{cells}")
+    _print_progress(progress, len(all_records))
 
 
 if __name__ == "__main__":

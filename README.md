@@ -5,8 +5,9 @@ training toward a General American accent. It measures intonation (pitch registe
 range, phrase-final rises/falls, phrase onsets) and maps off-target metrics to
 coaching drills.
 
-**Status:** deliverables 1–3 of 6: audio pipeline, F0 extraction, register metrics,
-phrase-ending (HRT) and onset analysis, 3-second window movement, HTML/PDF reports.
+**Status:** deliverables 1–4 of 6: audio pipeline, F0 extraction, register metrics,
+phrase-ending (HRT) and onset analysis, 3-second window movement, HTML/PDF reports,
+session history with progression warnings.
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## Setup
@@ -18,6 +19,8 @@ uv sync
 uv run accent-analyzer analyze recording.m4a
 uv run accent-analyzer analyze recording.m4a --json
 uv run accent-analyzer analyze recording.m4a --name "Monday morning" -o report.html -o report.pdf
+uv run accent-analyzer analyze recording.m4a --name "Monday morning" --history ~/.accent_history.db
+uv run accent-analyzer history --history ~/.accent_history.db --last 10
 uv run accent-analyzer analyze recording.m4a --pitch-method yin --f0-min 70 --f0-max 260
 ```
 
@@ -53,8 +56,23 @@ measurable endings triggers an "insufficient data" caveat.
 the flag can be repeated. The HTML file is self-contained (charts embedded) and follows
 the viewer's light/dark setting. Sections: headline verdict, scorecard, pitch contour,
 phrase-ending histogram (with both pause thresholds and a table of every ending),
-3-second window and onset breakdowns, findings, and coaching recommendations. The
-"compared with previous sessions" trajectory appears once session history exists.
+3-second window and onset breakdowns, findings, and coaching recommendations. With
+`--history`, the report adds a "compared with previous sessions" section.
+
+## Session history
+
+`--history PATH` (or `ACCENT_HISTORY=PATH`) stores each analysis in SQLite: time, name,
+session/take, duration, all metrics, and the phrase-end and onset distributions. Takes
+are grouped into sessions by date unless you pass `--session`; `--date` backfills older
+recordings. After each analysis, and in `accent-analyzer history`, these rules run:
+
+| Flag | Rule |
+|---|---|
+| Register deflation | mean F0 falls on 3+ consecutive recordings, > 30 Hz in total |
+| Complacency regression | HRT rises on 2+ consecutive recordings after a breakthrough (HRT ≤ 25%) |
+| Integration milestone | HRT < 25%, HIGH onsets > 40%, range > 2.6× in one recording (first / repeat) |
+| Fatigue | latest take in a session worse than take 1 on 2+ of: HRT +15 pts, HIGH onsets −15 pts, range −0.3×, std −15 Hz, mean F0 −20 Hz |
+| Register-independent HRT | HRT ≤ 25% in most animated (> 180 Hz) *and* calm (< 160 Hz) recordings = robust; animated only = fragile (last 10 recordings with 10+ endings) |
 
 ## Tests
 

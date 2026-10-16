@@ -16,7 +16,7 @@ src/accent_analyzer/
     pipeline.py        analyze_file() -> AnalysisResult (the object everything downstream reads)
   reports/             charts.py (matplotlib, light + dark), verdict.py (headline + scorecard),
                        html_report.py (self-contained HTML), pdf_report.py (reportlab)
-  history/             [4] SQLite store, trajectory queries, progression warnings
+  history/             store.py (SQLite, one row per recording), progression.py (multi-recording rules)
   coaching/            [5] module library (data, not code) + recommendation engine
   dashboard/           [6] static HTML dashboard generated from history
 tests/
@@ -36,7 +36,7 @@ re-run DSP.
    3 s window slopes. Fixtures: NZE-like, AmE-like, short clip, continuous speech.
 3. **Reports** — done. Headline verdict, scorecard, contour, phrase-end histogram,
    window breakdown, onset distribution, recommendations; HTML first, then PDF.
-4. **History**: SQLite (`recordings` table + JSON blob of distributions), trajectory
+4. **History** — done. SQLite (`recordings` table + JSON blob of distributions), trajectory
    queries, register-deflation / complacency-regression / integration-milestone /
    fatigue flags.
 5. **Coaching**: the 9 modules as structured data with trigger predicates on
@@ -83,6 +83,12 @@ detection.
   CVD-validated in light and dark). Direction is also carried by position, ▲/▼ markers
   or labels, never colour alone. Static PNG charts (shared with the PDF), so no hover
   tooltips; every chart's numbers are also in a table or caption.
+
+* **Thresholds I chose** where the spec said "significantly" or left it open: fatigue
+  needs 2+ of the degradations listed in the README; register-independent HRT uses the
+  last 10 recordings with 10+ phrase endings and "controlled" = HRT ≤ 25% in at least
+  half of a register's recordings; a breakthrough is any recording with HRT ≤ 25%.
+  All are constants at the top of `history/progression.py`.
 
 ## Known calibration risks
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from accent_analyzer.reports import charts
 from accent_analyzer.reports.theme import DARK, LIGHT
-from accent_analyzer.reports.verdict import format_value, headline, scorecard
+from accent_analyzer.reports.verdict import format_value, headline, own_findings, scorecard
 from accent_analyzer.targets import Status
 
 _SEVERITY_ICON = {"good": "✓", "info": "•", "warning": "!"}
@@ -66,7 +66,7 @@ figure img { width: 100%; height: auto; display: block; }
 figcaption { color: var(--ink-2); font-size: 13px; margin-top: 8px; }
 details { margin-top: 12px; }
 summary { cursor: pointer; color: var(--ink-2); font-size: 13px; }
-ul.findings { list-style: none; padding: 0; margin: 0; }
+ul.findings { list-style: none; padding: 0; margin: 12px 0 0; }
 ul.findings li { padding: 8px 0; border-bottom: 1px solid var(--grid); display: flex; gap: 10px; }
 ul.findings li:last-child { border-bottom: 0; }
 .sev { flex: none; width: 22px; height: 22px; border-radius: 50%; display: inline-flex;
@@ -154,13 +154,14 @@ def _thresholds_table(result) -> str:
     )
 
 
-def _findings_html(result) -> str:
+def _findings_html(findings) -> str:
     items = "".join(
         f"<li><span class='sev {f.severity}' aria-label='{f.severity}'>{_SEVERITY_ICON[f.severity]}</span>"
         f"<span>{escape(f.message)}</span></li>"
-        for f in result.findings
+        for f in findings
     )
     return f"<ul class='findings'>{items}</ul>"
+
 
 
 def _recommendations_html(recommendations: list[dict] | None) -> str:
@@ -183,6 +184,7 @@ def render_html(
     title: str | None = None,
     history: list[dict] | None = None,
     recommendations: list[dict] | None = None,
+    progress: list | None = None,
 ) -> str:
     name = title or Path(result.source).name or "Recording"
     p = result.phrasing.primary
@@ -211,15 +213,17 @@ def render_html(
                   "recording's mean. Shaded = native target.")
         + "</section>",
     ]
-    if history and len(history) >= 2:
-        sections.append(
-            "<section><h2>Compared with previous sessions</h2>"
-            + _figure(charts.trajectory, history, "Trajectory of key metrics across sessions",
-                      f"{len(history)} sessions. Shaded = target range.")
-            + "</section>"
+    if (history and len(history) >= 2) or progress:
+        chart = (
+            _figure(charts.trajectory, history, "Trajectory of key metrics across sessions",
+                    f"Last {len(history)} recordings, this one on the right. Shaded = target range.")
+            if history and len(history) >= 2 else
+            "<p class='meta'>The trajectory chart appears from the second recording on.</p>"
         )
+        flags = _findings_html(progress) if progress else "<p class='meta'>No progression flags.</p>"
+        sections.append(f"<section><h2>Compared with previous sessions</h2>{chart}{flags}</section>")
     sections += [
-        f"<section><h2>Findings</h2>{_findings_html(result)}</section>",
+        f"<section><h2>Findings</h2>{_findings_html(own_findings(result, progress))}</section>",
         f"<section><h2>Coaching recommendations</h2>{_recommendations_html(recommendations)}</section>",
     ]
     params = result.track.params
