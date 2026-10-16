@@ -21,6 +21,9 @@ src/accent_analyzer/
                        engine.py (ranking), report.py (standalone coaching plan HTML)
   dashboard/           build.py (derived numbers: radar scores, best-ever, deflation runs),
                        template.html (self-contained page; vanilla JS draws SVG charts)
+  app/                 server.py (Flask API, 127.0.0.1 only), payload.py (Results JSON),
+                       launcher.py (port handling, desktop shortcut), prompts.toml,
+                       static/ (index.html, app.css, app.js: plain JS, no build step)
 tests/
   synth.py             synthetic harmonic signals with known F0 contours
 ```
@@ -44,7 +47,8 @@ re-run DSP.
 5. **Coaching** — done. The 9 modules as structured data with trigger predicates on
    `AnalysisResult`; engine ranks triggered modules by distance from target.
 6. **Dashboard** — done. HRT/falls trajectory, mean-F0 bars, radar vs best-ever, sortable table.
-7. **Later**: shadowing (DTW-aligned contour correlation), A/B mode, daily drill tracker.
+7. **App** — done. Record / Results / Progress / Practice / Settings in the browser.
+8. **Later**: shadowing (DTW-aligned contour correlation), A/B mode, daily drill tracker.
 
 ## v2 phonetic features (not in v1)
 
@@ -100,6 +104,12 @@ detection.
   75% → 0; falls ÷ 75%; HIGH onsets ÷ 40%; range (r − 1) ÷ 1.5; std ÷ 60 Hz; voiced
   ratio 1 inside 60–80%). "Best-ever" is the recording with the highest average across
   axes. Both live in `dashboard/build.py`.
+
+* **App security**: the server binds 127.0.0.1, rejects any request whose Host isn't
+  localhost (DNS rebinding), and requires an `X-Accent-App` header on writes, which a
+  third-party page can't send cross-origin (CSRF). Uploads get server-chosen names.
+* **Stored recordings are re-analyzed with their own saved pitch settings**, so changing
+  Settings only affects new takes.
 
 ## Known calibration risks
 

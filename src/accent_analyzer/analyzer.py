@@ -326,5 +326,24 @@ def dashboard(history_path: str | None, output: str, open_browser: bool) -> None
         webbrowser.open(written.resolve().as_uri())
 
 
+@cli.command()
+@click.option("--port", type=int, default=8765, show_default=True, help="Port on 127.0.0.1 (next free one if taken).")
+@click.option("--data-dir", type=click.Path(file_okay=False), help="Where recordings and settings are kept "
+              "(default ~/.accent_analyzer).")
+@HISTORY_OPTION
+@click.option("--no-browser", is_flag=True, help="Don't open the browser automatically.")
+@click.option("--install-shortcut", is_flag=True, help="Put an 'Accent Coach' launcher on your desktop and exit.")
+def app(port: int, data_dir: str | None, history_path: str | None, no_browser: bool, install_shortcut: bool) -> None:
+    """Open the Accent Coach app in your browser (record, results, progress, practice)."""
+    from accent_analyzer.app import create_app
+    from accent_analyzer.app.launcher import install_shortcut as make_shortcut, serve
+
+    if install_shortcut:
+        path = make_shortcut()
+        click.echo(f"Shortcut created: {path}\nDouble-click it to open Accent Coach.")
+        return
+    serve(create_app(data_dir, history_path), port=port, open_browser=not no_browser, echo=click.echo)
+
+
 if __name__ == "__main__":
     cli()

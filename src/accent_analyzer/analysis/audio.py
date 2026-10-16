@@ -9,7 +9,8 @@ import ffmpeg
 import numpy as np
 
 TARGET_SR = 16_000
-SUPPORTED_EXTENSIONS = frozenset({".m4a", ".mp3", ".wav", ".flac"})
+# .webm/.ogg/.mp4 are what browsers record (Chrome/Edge, Firefox, Safari).
+SUPPORTED_EXTENSIONS = frozenset({".m4a", ".mp3", ".wav", ".flac", ".aac", ".webm", ".ogg", ".mp4"})
 PEAK_TARGET = 0.95
 
 

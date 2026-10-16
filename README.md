@@ -5,16 +5,39 @@ training toward a General American accent. It measures intonation (pitch registe
 range, phrase-final rises/falls, phrase onsets) and maps off-target metrics to
 coaching drills.
 
-**Status:** deliverables 1–6 done: audio pipeline, F0 extraction, register metrics,
-phrase-ending (HRT) and onset analysis, 3-second window movement, HTML/PDF reports,
-session history with progression warnings, coaching library and recommendations,
-interactive dashboard. Shadowing, A/B mode, the drill tracker and forced-alignment
-phonetics are planned next.
+**Status:** deliverables 1–6 done plus a local web app: audio pipeline, F0 extraction,
+register metrics, phrase-ending (HRT) and onset analysis, 3-second window movement,
+HTML/PDF reports, session history with progression warnings, coaching library and
+recommendations, interactive dashboard. Shadowing, A/B mode, the drill tracker and
+forced-alignment phonetics are planned next.
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
-## Setup
+## Quick start: the app
 
-Requires [uv](https://docs.astral.sh/uv/) and `ffmpeg` on `PATH`.
+Needs [uv](https://docs.astral.sh/uv/), `ffmpeg` and `git` on your PATH.
+
+```
+uv tool install "git+https://github.com/traaa1234/accent@claude/lucid-planck-hf04ep"
+accent-analyzer app --install-shortcut     # optional: "Accent Coach" launcher on your desktop
+accent-analyzer app                        # opens http://localhost:8765 in your browser
+```
+
+* **Record**: read a passage, talk about a topic, or drop in an audio file. A ring
+  fills at one minute, and a level meter shows the mic is picking you up.
+* **Results**: verdict, key numbers, your pitch contour with every phrase ending;
+  click a ▲/▼ to hear that phrase. Full HTML/PDF report and delete buttons.
+* **Progress**: the dashboard, always current.
+* **Practice**: coaching modules, recommended ones first, with "Record this drill".
+* **Settings**: accent background, voice range, pitch tracker.
+
+Everything stays on your computer: the server only listens on 127.0.0.1, and
+recordings live in `~/.accent_analyzer` (history shared with the command line via
+`ACCENT_HISTORY`). Keep the app's terminal window open while using it; close it to stop.
+Launching again while it's running just reopens the browser tab.
+
+## Command line
+
+The app and the command line share the same analysis and history.
 
 ```bash
 uv sync

@@ -158,7 +158,7 @@ def register_independence(records: list[Record]) -> Finding | None:
         return Finding(
             "register_independence", "warning", "progress",
             f"Fragile HRT control: falls hold when you're animated ({counts['animated']}) but not in "
-            f"calm speech ({counts['calm']}). Practise statement falls at a relaxed, low pitch.",
+            f"calm speech ({counts['calm']}). Practice statement falls at a relaxed, low pitch.",
         )
     if controlled["animated"]:
         return Finding(

@@ -214,5 +214,10 @@ class HistoryStore:
             for r in records
         ]
 
+    def delete(self, record_id: int) -> bool:
+        cur = self._conn.execute("DELETE FROM recordings WHERE id = ?", (record_id,))
+        self._conn.commit()
+        return cur.rowcount > 0
+
     def __len__(self) -> int:
         return self._conn.execute("SELECT COUNT(*) FROM recordings").fetchone()[0]

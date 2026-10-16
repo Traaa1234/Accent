@@ -1,0 +1,61 @@
+# Material for the Record screen.
+#
+# Passages are written for analysis: mostly declarative sentences (each a chance to
+# fall, or to rise), varied sentence lengths, and commas that invite new phrases.
+# Each takes roughly 60-90 seconds to read aloud.
+
+[[passage]]
+id = "commute"
+title = "The morning commute"
+text = """I usually leave the house at seven thirty. The bus stop is a five-minute walk from my front door. \
+Most mornings, the bus is on time, but on Mondays it's always late. I've learned to bring a book. \
+Last week I finished a novel about a family who runs a small hotel by the sea. \
+The ending surprised me. I didn't expect the youngest sister to sell the business. \
+By the time I get to the office, it's usually a quarter past eight. \
+I make a coffee, check my calendar, and plan the day. That first half hour is the quietest part of my day, \
+and I try not to waste it."""
+
+[[passage]]
+id = "project"
+title = "A project update"
+text = """Here's where we are with the project. The design phase is finished, and the team signed off on it on Friday. \
+We started building the first version this week. So far, we're about two days ahead of schedule. \
+There is one risk I want to mention. The supplier hasn't confirmed the delivery date for the new hardware. \
+If it arrives late, testing will slip by a week. I've asked them for an answer by Wednesday. \
+In the meantime, we'll keep working on the parts that don't depend on it. \
+I'm confident we can still launch at the end of the month. I'll send another update next Friday."""
+
+[[passage]]
+id = "trip"
+title = "A weekend trip"
+text = """We drove up to the mountains last weekend. It took about four hours, mostly because of the traffic leaving the city. \
+The cabin was smaller than it looked in the photos, but it had a great view of the lake. \
+On Saturday, we hiked to the top of the ridge. The trail was steep, and it was colder than we expected. \
+We stopped for lunch at a little café in town. I had the best soup I've eaten all year. \
+On Sunday morning it rained, so we stayed inside, played cards, and read. \
+We were home by six. I'd definitely go back in the summer."""
+
+[[passage]]
+id = "opinion"
+title = "Giving an opinion"
+text = """I think working from home has been good for most people. You save time, and you save money on transport. \
+That said, it isn't perfect. Some people feel isolated, especially when they're new to a team. \
+It's harder to learn from colleagues when you can't just turn around and ask a question. \
+In my experience, two or three days in the office works best. \
+You get the focus of working at home and the energy of being around people. \
+Of course, it depends on the job. A nurse or a chef can't do their work from a laptop. \
+But for office work, I think a mix is the right answer."""
+
+[topics]
+prompts = [
+    "Describe what you did last weekend.",
+    "Explain how to make your favorite meal.",
+    "Talk about a place you'd like to visit and why.",
+    "Describe your job or studies to someone you've just met.",
+    "Talk about a book, film or show you enjoyed recently.",
+    "Describe the town or city where you grew up.",
+    "Explain a decision you made recently and how you made it.",
+    "Talk about a skill you're learning and how it's going.",
+    "Describe your ideal day off.",
+    "Give your opinion on a piece of news you read this week.",
+]
