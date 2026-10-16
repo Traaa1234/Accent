@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accent Progress Dashboard</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --band: #eef4ee;
+  --rise: #e34948; --fall: #2a78d6; --latest: #2a78d6; --best: #eb6834; --bar: #2a78d6;
+  --warn-fill: #fab219; --good: #006300; --bad: #b42d2d; --warn-text: #8a5a00; --hover: rgba(11,11,11,0.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --band: #1c241c;
+    --rise: #e66767; --fall: #3987e5; --latest: #3987e5; --best: #d95926; --bar: #3987e5;
+    --warn-fill: #fab219; --good: #0ca30c; --bad: #e66767; --warn-text: #fab219; --hover: rgba(255,255,255,0.06);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --band: #1c241c;
+  --rise: #e66767; --fall: #3987e5; --latest: #3987e5; --best: #d95926; --bar: #3987e5;
+  --warn-fill: #fab219; --good: #0ca30c; --bad: #e66767; --warn-text: #fab219; --hover: rgba(255,255,255,0.06);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1120px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-size: 24px; margin: 0 0 2px; letter-spacing: -0.01em; }
+h2 { font-size: 15px; margin: 0 0 2px; }
+.meta, .sub { color: var(--muted); font-size: 13px; margin: 0; }
+.sub { margin-bottom: 10px; }
+.controls { display: flex; gap: 8px; align-items: center; margin: 18px 0 14px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { font: inherit; font-size: 13px; color: var(--ink-2); background: none; border: 0; padding: 6px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { color: var(--ink); background: var(--hover); font-weight: 600; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
+.kpi .label { color: var(--ink-2); font-size: 13px; }
+.kpi .value { font-size: 26px; font-weight: 650; letter-spacing: -0.01em; margin: 2px 0; }
+.kpi .delta { font-size: 13px; }
+.good { color: var(--good); } .bad { color: var(--bad); } .neutral { color: var(--muted); }
+.grid2 { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; margin-top: 12px; }
+@media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+.stack > .card { margin-top: 12px; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin: 4px 0 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.key { width: 16px; height: 0; border-top: 2px solid; display: inline-block; }
+.chart { position: relative; width: 100%; }
+svg { display: block; overflow: visible; }
+svg text { font: 11px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--muted); }
+svg .lbl { fill: var(--ink-2); font-size: 12px; }
+svg .strong { fill: var(--ink); font-weight: 600; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.baseline { stroke: var(--axis); stroke-width: 1; }
+.band { fill: var(--band); }
+.line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.s-rise { stroke: var(--rise); } .s-fall { stroke: var(--fall); }
+.dot { stroke: var(--surface); stroke-width: 2; }
+.dot.s-rise { fill: var(--rise); } .dot.s-fall { fill: var(--fall); }
+.cross { stroke: var(--axis); stroke-width: 1; }
+.hit { fill: transparent; cursor: crosshair; outline: none; }
+.bar { fill: var(--bar); } .bar.warn { fill: var(--warn-fill); }
+.bar.hover { opacity: 0.75; }
+.refline { stroke: var(--axis); stroke-width: 1; }
+.bracket { stroke: var(--ink-2); stroke-width: 1; fill: none; }
+.ring { fill: none; stroke: var(--grid); }
+.ring.target { stroke: var(--axis); }
+.spoke { stroke: var(--grid); }
+.poly { stroke-width: 2; stroke-linejoin: round; }
+.poly.latest { stroke: var(--latest); fill: var(--latest); fill-opacity: 0.12; }
+.poly.best { stroke: var(--best); fill: var(--best); fill-opacity: 0.10; }
+.vdot.latest { fill: var(--latest); } .vdot.best { fill: var(--best); }
+.vdot { stroke: var(--surface); stroke-width: 2; }
+.vhit { fill: transparent; cursor: pointer; outline: none; }
+.vhit:focus-visible, .hit:focus-visible, .barhit:focus-visible { stroke: var(--ink-2); stroke-width: 1; }
+.barhit { fill: transparent; cursor: pointer; outline: none; }
+#tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 140px; max-width: 260px; display: none; }
+#tip .t { color: var(--ink-2); margin-bottom: 4px; }
+#tip .row { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+#tip .row .name { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+#tip .row .v { font-weight: 650; font-variant-numeric: tabular-nums; }
+#tip .note { color: var(--muted); margin-top: 4px; }
+ul.flags { list-style: none; padding: 0; margin: 0; }
+ul.flags li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); }
+ul.flags li:last-child { border-bottom: 0; }
+.sev { flex: none; font-weight: 700; width: 20px; text-align: center; }
+.sev.warning { color: var(--warn-text); } .sev.good { color: var(--good); } .sev.info { color: var(--muted); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { padding: 7px 8px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+th:nth-child(-n+5), td:nth-child(-n+5) { text-align: left; }
+td { font-variant-numeric: tabular-nums; }
+th button { font: inherit; font-size: 12px; font-weight: 600; color: var(--muted); background: none; border: 0;
+  padding: 0; cursor: pointer; text-transform: uppercase; letter-spacing: 0.03em; }
+th[aria-sort] button { color: var(--ink); }
+td .st { margin-left: 4px; font-size: 11px; }
+td .st.on { color: var(--good); } td .st.off { color: var(--warn-text); }
+tr.best td:first-child::after { content: " ★"; color: var(--best); }
+tbody tr:hover { background: var(--hover); }
+.empty { color: var(--muted); padding: 32px 0; text-align: center; }
+footer { color: var(--muted); font-size: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Accent progress</h1>
+    <p class="meta" id="meta"></p>
+  </header>
+  <div class="controls" id="controls" hidden>
+    <span class="meta">Show</span>
+    <div class="seg" id="range" role="group" aria-label="Recordings shown"></div>
+  </div>
+  <div id="content">
+    <section class="kpis" id="kpis" aria-label="Latest recording"></section>
+    <div class="stack">
+      <section class="card">
+        <h2>HRT and falling phrase endings</h2>
+        <p class="sub">Share of phrase endings that rise (HRT) and fall, per recording. Shaded: HRT target.</p>
+        <div class="legend" id="trend-legend"></div>
+        <div class="chart" id="trend"></div>
+      </section>
+    </div>
+    <div class="grid2">
+      <section class="card">
+        <h2>Mean pitch per recording</h2>
+        <p class="sub">Watch for register deflation: mean pitch sliding down over several recordings.</p>
+        <div class="chart" id="f0"></div>
+      </section>
+      <section class="card">
+        <h2>Latest vs best-ever</h2>
+        <p class="sub">Each axis is progress toward the American target; the outer ring is on target.</p>
+        <div class="legend" id="radar-legend"></div>
+        <div class="chart" id="radar"></div>
+      </section>
+    </div>
+    <div class="stack">
+      <section class="card">
+        <h2>Progress flags</h2>
+        <p class="sub">For your latest recording, judged against your whole history.</p>
+        <ul class="flags" id="flags"></ul>
+      </section>
+      <section class="card">
+        <h2>All recordings</h2>
+        <p class="sub">Click a column to sort. ✓ on target · ▲ above · ▼ below · ★ best-ever benchmark.</p>
+        <div class="table-wrap"><table id="table"><thead></thead><tbody></tbody></table></div>
+      </section>
+    </div>
+  </div>
+  <footer id="footer"></footer>
+</main>
+<div id="tip" role="status" aria-live="polite"></div>
+<script>
+"use strict";
+const D = /*__DATA__*/null;
+const SVGNS = "http://www.w3.org/2000/svg";
+const ALL = D.records;
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function el(tag, attrs, parent, text) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const k in attrs || {}) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function h(tag, cls, parent, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  if (parent) parent.appendChild(n);
+  return n;
+}
+const isNum = v => typeof v === "number" && isFinite(v);
+const pct = v => isNum(v) ? Math.round(v * 100) + "%" : "n/a";
+const FMT = {
+  hrt_rate: pct, fall_rate: pct, voiced_ratio: pct, high_onset_rate: pct, low_onset_rate: pct,
+  mean_f0: v => isNum(v) ? Math.round(v) + " Hz" : "n/a",
+  std_f0: v => isNum(v) ? Math.round(v) + " Hz" : "n/a",
+  range_ratio: v => isNum(v) ? v.toFixed(2) + "×" : "n/a",
+  n_phrase_ends: v => isNum(v) ? String(v) : "n/a",
+};
+function shortDate(iso) { const d = new Date(iso); return MON[d.getMonth()] + " " + d.getDate(); }
+function longDate(iso) { const d = new Date(iso); return shortDate(iso) + " " + d.getFullYear() + ", " +
+  String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+function status(metric, v) {
+  const t = D.targets[metric];
+  if (!t || !isNum(v)) return null;
+  if (t.low != null && v < t.low) return "below";
+  if (t.high != null && v > t.high) return "above";
+  return "on";
+}
+
+/* ---------- tooltip ---------- */
+const tip = document.getElementById("tip");
+function showTip(x, y, title, rows, note) {
+  tip.replaceChildren();
+  h("div", "t", tip, title);
+  for (const r of rows) {
+    const row = h("div", "row", tip);
+    const name = h("span", "name", row);
+    if (r.color) { const k = h("span", "key", name); k.style.borderColor = r.color; }
+    name.appendChild(document.createTextNode(r.name));
+    h("span", "v", row, r.value);
+  }
+  if (note) h("div", "note", tip, note);
+  tip.style.display = "block";
+  const w = tip.offsetWidth, hh = tip.offsetHeight;
+  let left = x + 14, top = y - hh - 10;
+  if (left + w > window.innerWidth - 8) left = x - w - 14;
+  if (top < 8) top = y + 16;
+  tip.style.left = Math.max(8, left) + "px";
+  tip.style.top = top + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+function anchor(node) { const b = node.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; }
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/* ---------- range filter ---------- */
+let view = ALL;
+let offset = 0;
+function setupRange() {
+  const opts = [];
+  if (ALL.length > 10) opts.push(["Last 10", 10]);
+  if (ALL.length > 30) opts.push(["Last 30", 30]);
+  if (!opts.length) return;
+  opts.push(["All " + ALL.length, ALL.length]);
+  const seg = document.getElementById("range");
+  const pick = n => {
+    offset = ALL.length - n; view = ALL.slice(offset);
+    for (const b of seg.children) b.setAttribute("aria-pressed", String(b.dataset.n == n));
+    render();
+  };
+  for (const [label, n] of opts) {
+    const b = h("button", "", seg, label); b.type = "button"; b.dataset.n = n;
+    b.addEventListener("click", () => pick(n));
+  }
+  document.getElementById("controls").hidden = false;
+  pick(ALL.length > 30 ? 30 : ALL.length);
+}
+
+/* ---------- KPI tiles ---------- */
+function kpi(parent, label, value, delta, cls) {
+  const c = h("div", "card kpi", parent);
+  h("div", "label", c, label);
+  h("div", "value", c, value);
+  h("div", "delta " + (cls || "neutral"), c, delta || " ");
+}
+function deltaText(cur, prev, unit, scale, goodWhenDown) {
+  if (!isNum(cur) || !isNum(prev)) return [null, "neutral"];
+  const d = (cur - prev) * scale;
+  const r = Math.round(d * (unit === "×" ? 100 : 1)) / (unit === "×" ? 100 : 1);
+  if (r === 0) return ["no change vs previous", "neutral"];
+  const up = r > 0;
+  const cls = goodWhenDown == null ? "neutral" : (up !== goodWhenDown ? "good" : "bad");
+  return [(up ? "▲ " : "▼ ") + Math.abs(r) + unit + " vs previous", cls];
+}
+function renderKpis() {
+  const k = document.getElementById("kpis");
+  k.replaceChildren();
+  const last = view[view.length - 1], prev = view[view.length - 2];
+  const m = last.metrics, p = prev ? prev.metrics : {};
+  kpi(k, "Recordings", String(view.length), view.length < ALL.length ? "of " + ALL.length + " in total" : "since " + shortDate(ALL[0].date));
+  let [t, c] = deltaText(m.hrt_rate, p.hrt_rate, " pts", 100, true);
+  kpi(k, "HRT, latest", pct(m.hrt_rate), t || "target ≤ 25%", c);
+  [t, c] = deltaText(m.range_ratio, p.range_ratio, "×", 1, false);
+  kpi(k, "Range ratio, latest", FMT.range_ratio(m.range_ratio), t || "target 2.5–4×", c);
+  [t, c] = deltaText(m.mean_f0, p.mean_f0, " Hz", 1, null);
+  kpi(k, "Mean pitch, latest", FMT.mean_f0(m.mean_f0), t || last.register, c);
+  const hits = view.filter(r => isNum(r.metrics.hrt_rate) && r.metrics.hrt_rate < 0.25 &&
+    r.metrics.high_onset_rate > 0.40 && r.metrics.range_ratio > 2.6).length;
+  kpi(k, "Integration milestones", String(hits), "HRT < 25%, HIGH onsets > 40%, range > 2.6×");
+}
+
+/* ---------- trend line chart ---------- */
+const SERIES = [
+  { key: "hrt_rate", cls: "s-rise", name: "HRT (rising)", color: "--rise" },
+  { key: "fall_rate", cls: "s-fall", name: "Falling", color: "--fall" },
+];
+function renderTrend() {
+  const box = document.getElementById("trend");
+  box.replaceChildren();
+  const leg = document.getElementById("trend-legend");
+  leg.replaceChildren();
+  for (const s of SERIES) {
+    const sp = h("span", "", leg);
+    const k = h("span", "key", sp); k.style.borderColor = cssVar(s.color);
+    sp.appendChild(document.createTextNode(s.name));
+  }
+  const W = box.clientWidth, H = 260, m = { t: 12, r: 92, b: 30, l: 40 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b, n = view.length;
+  const svg = el("svg", { width: W, height: H, role: "img",
+    "aria-label": "Line chart of HRT and falling phrase endings per recording" }, box);
+  const x = i => n === 1 ? m.l + pw / 2 : m.l + i * pw / (n - 1);
+  const y = v => m.t + ph * (1 - v);
+  el("rect", { class: "band", x: m.l, y: y(0.25), width: pw, height: y(0) - y(0.25) }, svg);
+  el("text", { x: m.l + 6, y: y(0.25) + 13 }, svg, "HRT target ≤ 25%");
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+    el("line", { class: v === 0 ? "baseline" : "gridline", x1: m.l, x2: m.l + pw, y1: y(v), y2: y(v) }, svg);
+    el("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg, Math.round(v * 100) + "%");
+  }
+  const ticks = labelIdx(n, Math.max(1, Math.ceil(n / Math.max(1, Math.floor(pw / 64)))));
+  view.forEach((r, i) => {
+    if (ticks.has(i)) el("text", { x: x(i), y: H - 8, "text-anchor": "middle" }, svg, shortDate(r.date));
+  });
+  const ends = [];
+  for (const s of SERIES) {
+    let d = "", pen = false;
+    view.forEach((r, i) => {
+      const v = r.metrics[s.key];
+      if (!isNum(v)) { pen = false; return; }
+      d += (pen ? "L" : "M") + x(i) + "," + y(v); pen = true;
+    });
+    el("path", { class: "line " + s.cls, d }, svg);
+    view.forEach((r, i) => {
+      const v = r.metrics[s.key];
+      if (isNum(v)) el("circle", { class: "dot " + s.cls, cx: x(i), cy: y(v), r: n > 40 ? 2.5 : 4 }, svg);
+    });
+    for (let i = n - 1; i >= 0; i--) {
+      const v = view[i].metrics[s.key];
+      if (isNum(v)) { ends.push({ s, i, v, y: y(v) }); break; }
+    }
+  }
+  if (ends.length === 2 && Math.abs(ends[0].y - ends[1].y) < 15) {
+    const mid = (ends[0].y + ends[1].y) / 2, up = ends[0].y <= ends[1].y ? 0 : 1;
+    ends[up].y = mid - 8; ends[1 - up].y = mid + 8;
+  }
+  for (const e of ends) {
+    const t = el("text", { class: "lbl", x: x(e.i) + 10, y: e.y + 4 }, svg);
+    el("tspan", { class: "strong" }, t, pct(e.v));
+    el("tspan", {}, t, " " + (e.s.key === "hrt_rate" ? "HRT" : "falls"));
+  }
+  // Crosshair + tooltip, also driven by arrow keys.
+  const cross = el("line", { class: "cross", y1: m.t, y2: m.t + ph, visibility: "hidden" }, svg);
+  const hi = SERIES.map(s => el("circle", { class: "dot " + s.cls, r: 6, visibility: "hidden" }, svg));
+  const hit = el("rect", { class: "hit", x: m.l - 10, y: m.t, width: pw + 20, height: ph, tabindex: 0,
+    "aria-label": "Trend chart; use left and right arrow keys to read each recording" }, svg);
+  let cur = -1;
+  const show = (i, px, py) => {
+    cur = Math.max(0, Math.min(n - 1, i));
+    const r = view[cur];
+    cross.setAttribute("x1", x(cur)); cross.setAttribute("x2", x(cur)); cross.setAttribute("visibility", "visible");
+    SERIES.forEach((s, j) => {
+      const v = r.metrics[s.key];
+      hi[j].setAttribute("visibility", isNum(v) ? "visible" : "hidden");
+      if (isNum(v)) { hi[j].setAttribute("cx", x(cur)); hi[j].setAttribute("cy", y(v)); }
+    });
+    const ends = r.metrics.n_phrase_ends;
+    const [ax, ay] = px != null ? [px, py] : anchor(hi[0]);
+    showTip(ax, ay, r.label + " · " + longDate(r.date),
+      SERIES.map(s => ({ name: s.name, value: pct(r.metrics[s.key]), color: cssVar(s.color) }))
+        .concat([{ name: "Phrase endings", value: FMT.n_phrase_ends(ends) }]),
+      isNum(ends) && ends < 10 ? "Fewer than 10 endings: treat as indicative." : null);
+  };
+  const clear = () => { cross.setAttribute("visibility", "hidden"); hi.forEach(c => c.setAttribute("visibility", "hidden")); hideTip(); };
+  hit.addEventListener("pointermove", ev => {
+    const b = svg.getBoundingClientRect();
+    const i = n === 1 ? 0 : Math.round((ev.clientX - b.left - m.l) / (pw / (n - 1)));
+    show(i, ev.clientX, ev.clientY);
+  });
+  hit.addEventListener("pointerleave", clear);
+  hit.addEventListener("focus", () => show(n - 1));
+  hit.addEventListener("blur", clear);
+  hit.addEventListener("keydown", ev => {
+    if (ev.key === "ArrowLeft") { show(cur - 1); ev.preventDefault(); }
+    if (ev.key === "ArrowRight") { show(cur + 1); ev.preventDefault(); }
+  });
+}
+
+/* ---------- mean F0 bars ---------- */
+function labelIdx(n, step) {
+  const idx = [];
+  for (let i = 0; i < n; i += step) idx.push(i);
+  if (idx[idx.length - 1] !== n - 1) {
+    if (n - 1 - idx[idx.length - 1] < step * 0.6) idx.pop();
+    idx.push(n - 1);
+  }
+  return new Set(idx);
+}
+function niceMax(v) { const s = 50; return Math.ceil(v / s) * s; }
+function topRounded(x0, y0, w, hgt, r) {
+  r = Math.min(r, w / 2, hgt);
+  return `M${x0},${y0 + hgt}V${y0 + r}Q${x0},${y0} ${x0 + r},${y0}H${x0 + w - r}Q${x0 + w},${y0} ${x0 + w},${y0 + r}V${y0 + hgt}Z`;
+}
+function renderF0(height) {
+  const box = document.getElementById("f0");
+  box.replaceChildren();
+  const W = box.clientWidth, H = Math.max(250, height || 0), m = { t: 34, r: 92, b: 30, l: 44 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b, n = view.length;
+  const vals = view.map(r => r.metrics.mean_f0).filter(isNum);
+  const ymax = niceMax(Math.max(200, ...vals) * 1.05);
+  const svg = el("svg", { width: W, height: H, role: "img", "aria-label": "Bar chart of mean pitch per recording" }, box);
+  const y = v => m.t + ph * (1 - v / ymax);
+  for (let v = 0; v <= ymax; v += 50) {
+    el("line", { class: v === 0 ? "baseline" : "gridline", x1: m.l, x2: m.l + pw, y1: y(v), y2: y(v) }, svg);
+    el("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg, v + (v === ymax ? " Hz" : ""));
+  }
+  const band = pw / n, bw = Math.max(3, Math.min(36, band - 2, band * 0.62));
+  const warn = new Set();
+  const runs = D.deflation
+    .map(r => ({ ...r, start: r.start - offset, end: r.end - offset }))
+    .filter(r => r.end >= 0 && r.start < n)
+    .map(r => ({ ...r, start: Math.max(0, r.start) }));
+  for (const r of runs) for (let i = r.start; i <= r.end; i++) warn.add(i);
+  const bars = [];
+  view.forEach((r, i) => {
+    const v = r.metrics.mean_f0;
+    const cx = m.l + band * (i + 0.5);
+    if (isNum(v)) bars[i] = el("path", { class: "bar" + (warn.has(i) ? " warn" : ""), d: topRounded(cx - bw / 2, y(v), bw, y(0) - y(v), 4) }, svg);
+  });
+  const ticks = labelIdx(n, Math.max(1, Math.ceil(n / Math.max(1, Math.floor(pw / 56)))));
+  view.forEach((r, i) => {
+    if (ticks.has(i)) el("text", { x: m.l + band * (i + 0.5), y: H - 8, "text-anchor": "middle" }, svg, shortDate(r.date));
+  });
+  for (const [name, hz, text] of [["calm", D.registers.calm, "calm < 160 Hz"], ["animated", D.registers.animated, "animated > 180 Hz"]]) {
+    if (hz > ymax) continue;
+    el("line", { class: "refline", x1: m.l, x2: m.l + pw, y1: y(hz), y2: y(hz) }, svg);
+    el("text", { x: m.l + pw + 6, y: y(hz) + (name === "calm" ? 10 : -2) }, svg, text);
+  }
+  for (const r of runs) {
+    const top = Math.min(...view.slice(r.start, r.end + 1).map(x => y(x.metrics.mean_f0))) - 10;
+    const x1 = m.l + band * (r.start + 0.5) - bw / 2, x2 = m.l + band * (r.end + 0.5) + bw / 2;
+    el("path", { class: "bracket", d: `M${x1},${top + 5}V${top}H${x2}V${top + 5}` }, svg);
+    el("text", { class: "lbl", x: (x1 + x2) / 2, y: top - 6, "text-anchor": "middle" }, svg, "▼ deflation −" + Math.round(r.drop) + " Hz");
+  }
+  view.forEach((r, i) => {
+    const hit = el("rect", { class: "barhit", x: m.l + band * i, y: m.t, width: band, height: ph, tabindex: 0,
+      "aria-label": r.label + ": mean pitch " + FMT.mean_f0(r.metrics.mean_f0) }, svg);
+    const on = (px, py) => {
+      if (bars[i]) bars[i].classList.add("hover");
+      const [ax, ay] = px != null ? [px, py] : anchor(hit);
+      showTip(ax, ay, r.label + " · " + longDate(r.date), [
+        { name: "Mean pitch", value: FMT.mean_f0(r.metrics.mean_f0) },
+        { name: "Register", value: r.register },
+        { name: "Std dev", value: FMT.std_f0(r.metrics.std_f0) },
+      ], warn.has(i) ? "Part of a register-deflation run." : null);
+    };
+    const off = () => { if (bars[i]) bars[i].classList.remove("hover"); hideTip(); };
+    hit.addEventListener("pointermove", ev => on(ev.clientX, ev.clientY));
+    hit.addEventListener("pointerleave", off);
+    hit.addEventListener("focus", () => on());
+    hit.addEventListener("blur", off);
+  });
+}
+
+/* ---------- radar ---------- */
+function renderRadar() {
+  const box = document.getElementById("radar");
+  box.replaceChildren();
+  const leg = document.getElementById("radar-legend");
+  leg.replaceChildren();
+  const latest = view[view.length - 1], best = D.best != null ? ALL[D.best] : null;
+  const same = !best || best.id === latest.id;
+  const series = [{ r: latest, cls: "latest", name: "Latest · " + latest.label, color: "--latest" }];
+  if (!same) series.unshift({ r: best, cls: "best", name: "Best-ever · " + best.label, color: "--best" });
+  for (const s of series.slice().reverse()) {
+    const sp = h("span", "", leg);
+    const k = h("span", "key", sp); k.style.borderColor = cssVar(s.color);
+    sp.appendChild(document.createTextNode(s.name));
+  }
+  if (same) h("span", "", leg, "Latest is your best-ever recording.");
+  const W = box.clientWidth, size = Math.min(W, 380), H = size;
+  const R = size / 2 - 62, cx = W / 2, cy = H / 2 + 4;
+  const svg = el("svg", { width: W, height: H, role: "img", "aria-label": "Radar chart of latest recording against best-ever" }, box);
+  const axes = D.radarAxes, k = axes.length;
+  const ang = i => -Math.PI / 2 + i * 2 * Math.PI / k;
+  const pt = (i, v) => [cx + Math.cos(ang(i)) * R * v, cy + Math.sin(ang(i)) * R * v];
+  for (const v of [0.25, 0.5, 0.75, 1]) {
+    el("polygon", { class: "ring" + (v === 1 ? " target" : ""), points: axes.map((_, i) => pt(i, v).join(",")).join(" ") }, svg);
+  }
+  axes.forEach((a, i) => {
+    const [x2, y2] = pt(i, 1);
+    el("line", { class: "spoke", x1: cx, y1: cy, x2, y2 }, svg);
+    const [lx, ly] = pt(i, 1.13);
+    const c = Math.cos(ang(i));
+    el("text", { class: "lbl", x: lx, y: ly + 4, "text-anchor": Math.abs(c) < 0.2 ? "middle" : c > 0 ? "start" : "end" }, svg, a.label);
+  });
+  for (const s of series) {
+    const pts = axes.map((a, i) => pt(i, s.r.radar[a.key] ?? 0));
+    el("polygon", { class: "poly " + s.cls, points: pts.map(p => p.join(",")).join(" ") }, svg);
+    pts.forEach(([x, y]) => el("circle", { class: "vdot " + s.cls, cx: x, cy: y, r: 4 }, svg));
+  }
+  axes.forEach((a, i) => {
+    const [x, y] = pt(i, Math.max(latest.radar[a.key] ?? 0, 0.15));
+    const hit = el("circle", { class: "vhit", cx: x, cy: y, r: 14, tabindex: 0,
+      "aria-label": a.label + ": latest " + FMT[a.metric](latest.metrics[a.metric]) }, svg);
+    const on = (px, py) => {
+      const [ax, ay] = px != null ? [px, py] : anchor(hit);
+      const rows = [{ name: "Latest", value: FMT[a.metric](latest.metrics[a.metric]), color: cssVar("--latest") }];
+      if (!same) rows.push({ name: "Best-ever", value: FMT[a.metric](best.metrics[a.metric]), color: cssVar("--best") });
+      showTip(ax, ay, a.label, rows, a.target ? "Target " + a.target : null);
+    };
+    hit.addEventListener("pointermove", ev => on(ev.clientX, ev.clientY));
+    hit.addEventListener("pointerleave", hideTip);
+    hit.addEventListener("focus", () => on());
+    hit.addEventListener("blur", hideTip);
+  });
+}
+
+/* ---------- flags ---------- */
+function renderFlags() {
+  const ul = document.getElementById("flags");
+  ul.replaceChildren();
+  const icon = { good: "✓", info: "•", warning: "!" };
+  if (!D.flags.length) { h("li", "", ul, "No progression flags right now."); return; }
+  for (const f of D.flags) {
+    const li = h("li", "", ul);
+    const s = h("span", "sev " + f.severity, li, icon[f.severity]);
+    s.setAttribute("aria-label", f.severity);
+    h("span", "", li, f.message);
+  }
+}
+
+/* ---------- sortable table ---------- */
+const COLS = [
+  { key: "id", label: "#", get: r => r.id, fmt: v => String(v) },
+  { key: "date", label: "Date", get: r => r.date, fmt: v => longDate(v) },
+  { key: "label", label: "Name", get: r => r.label.toLowerCase(), fmt: (v, r) => r.label },
+  { key: "take", label: "Session · take", get: r => r.session + "|" + String(r.take).padStart(3, "0"), fmt: (v, r) => r.session + " · " + r.take },
+  { key: "register", label: "Register", get: r => r.register, fmt: v => v },
+  ...["hrt_rate", "fall_rate", "mean_f0", "std_f0", "range_ratio", "voiced_ratio", "high_onset_rate", "low_onset_rate", "n_phrase_ends"]
+    .map(k => ({ key: k, metric: k, label: { hrt_rate: "HRT", fall_rate: "Falls", mean_f0: "Mean F0", std_f0: "Std",
+      range_ratio: "Range", voiced_ratio: "Voiced", high_onset_rate: "HIGH on.", low_onset_rate: "LOW on.", n_phrase_ends: "Endings" }[k],
+      get: r => r.metrics[k], fmt: v => FMT[k](v) })),
+];
+let sort = { key: "date", dir: -1 };
+function renderTable() {
+  const table = document.getElementById("table");
+  const thead = table.tHead, tbody = table.tBodies[0];
+  thead.replaceChildren(); tbody.replaceChildren();
+  const tr = h("tr", "", thead);
+  for (const c of COLS) {
+    const th = h("th", "", tr);
+    th.scope = "col";
+    if (sort.key === c.key) th.setAttribute("aria-sort", sort.dir > 0 ? "ascending" : "descending");
+    const b = h("button", "", th, c.label + (sort.key === c.key ? (sort.dir > 0 ? " ↑" : " ↓") : ""));
+    b.type = "button";
+    b.addEventListener("click", () => {
+      sort = { key: c.key, dir: sort.key === c.key ? -sort.dir : (c.metric ? -1 : 1) };
+      renderTable();
+      table.tHead.querySelectorAll("button")[COLS.indexOf(c)].focus();
+    });
+  }
+  const col = COLS.find(c => c.key === sort.key);
+  const rows = view.slice().sort((a, b) => {
+    const va = col.get(a), vb = col.get(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return (va < vb ? -1 : va > vb ? 1 : 0) * sort.dir;
+  });
+  const bestId = D.best != null ? ALL[D.best].id : null;
+  for (const r of rows) {
+    const row = h("tr", r.id === bestId ? "best" : "", tbody);
+    for (const c of COLS) {
+      const v = c.get(r);
+      const td = h("td", "", row, c.fmt(v, r));
+      if (c.metric) {
+        const st = status(c.metric, r.metrics[c.metric]);
+        if (st) {
+          const s = h("span", "st " + (st === "on" ? "on" : "off"), td, st === "on" ? "✓" : st === "above" ? "▲" : "▼");
+          s.title = st === "on" ? "on target" : st + " target (" + D.targets[c.metric].label + ")";
+        }
+      }
+    }
+  }
+}
+
+/* ---------- main ---------- */
+function render() {
+  renderKpis(); renderTrend(); renderRadar(); renderFlags(); renderTable();
+  renderF0();
+  // Side by side: grow the bar chart so both cards end level.
+  const f0Card = document.getElementById("f0").closest(".card");
+  const radarCard = document.getElementById("radar").closest(".card");
+  if (f0Card.offsetTop === radarCard.offsetTop) {
+    // The grid stretches the card; measure the unused space below the chart inside it.
+    const box = document.getElementById("f0");
+    const pad = parseFloat(getComputedStyle(f0Card).paddingBottom);
+    const extra = f0Card.getBoundingClientRect().bottom - pad - box.getBoundingClientRect().bottom;
+    if (extra > 4) renderF0(box.offsetHeight + extra);
+  }
+}
+const meta = document.getElementById("meta");
+if (!ALL.length) {
+  document.getElementById("content").replaceChildren();
+  h("p", "empty", document.getElementById("content"), "No recordings yet. Analyze one with --history to start tracking.");
+} else {
+  meta.textContent = ALL.length + " recordings · " + shortDate(ALL[0].date) + " – " + shortDate(ALL[ALL.length - 1].date) +
+    " · generated " + longDate(D.generated);
+  document.getElementById("footer").textContent =
+    "Best-ever = highest average radar score among recordings with 10+ phrase endings (all time). " +
+    "Radar axes are scaled so the outer ring is the American target.";
+  setupRange();
+  if (ALL.length <= 10) render();
+  let pending = null, lastW = document.querySelector("main").clientWidth;
+  new ResizeObserver(() => {
+    const w = document.querySelector("main").clientWidth;
+    if (w === lastW) return;
+    lastW = w; clearTimeout(pending); pending = setTimeout(render, 80);
+  }).observe(document.querySelector("main"));
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+}
+</script>
+</body>
+</html>

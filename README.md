@@ -5,9 +5,11 @@ training toward a General American accent. It measures intonation (pitch registe
 range, phrase-final rises/falls, phrase onsets) and maps off-target metrics to
 coaching drills.
 
-**Status:** deliverables 1–5 of 6: audio pipeline, F0 extraction, register metrics,
+**Status:** deliverables 1–6 done: audio pipeline, F0 extraction, register metrics,
 phrase-ending (HRT) and onset analysis, 3-second window movement, HTML/PDF reports,
-session history with progression warnings, coaching library and recommendations.
+session history with progression warnings, coaching library and recommendations,
+interactive dashboard. Shadowing, A/B mode, the drill tracker and forced-alignment
+phonetics are planned next.
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## Setup
@@ -23,6 +25,7 @@ uv run accent-analyzer analyze recording.m4a --name "Monday morning" --history ~
 uv run accent-analyzer history --history ~/.accent_history.db --last 10
 uv run accent-analyzer analyze recording.m4a --accent nze --history ~/.accent_history.db
 uv run accent-analyzer coach --history ~/.accent_history.db --focus hrt -o plan.html
+uv run accent-analyzer dashboard --history ~/.accent_history.db --open
 uv run accent-analyzer analyze recording.m4a --pitch-method yin --f0-min 70 --f0-max 260
 ```
 
@@ -99,6 +102,20 @@ modules follow. HRT and onset modules are marked *provisional* when fewer than 1
 phrase endings were measurable. `--accent` is remembered in the history, so set it once.
 `analyze` shows the top 4 and puts them in the report; `coach` gives the full plan with
 current / previous / best values for each progress indicator.
+
+## Dashboard
+
+`accent-analyzer dashboard --history PATH [-o file.html] [--open]` writes one
+self-contained, offline HTML file (no CDN) that follows light/dark mode:
+
+* KPI tiles for the latest recording with change vs the previous one
+* HRT and falling-endings trajectory on one % axis, crosshair tooltip (arrow keys work too)
+* Mean pitch bars with calm/animated reference lines; register-deflation runs are
+  highlighted and labelled
+* Radar of the latest recording vs your best-ever (highest average score among
+  recordings with 10+ phrase endings); each axis is scaled so the outer ring is the target
+* Current progression flags and a sortable table of every recording
+* With more than 10 recordings, a Last 10 / Last 30 / All control scopes everything
 
 ## Tests
 

@@ -14,6 +14,7 @@ from accent_analyzer.analysis.pipeline import AnalysisResult, analyze_file
 from accent_analyzer.analysis.pitch import DEFAULT_F0_MAX, DEFAULT_F0_MIN
 from accent_analyzer.coaching import ACCENTS, load_library, recommend
 from accent_analyzer.coaching.report import write_coaching_html
+from accent_analyzer.dashboard import write_dashboard
 from accent_analyzer.history import HistoryStore, progression
 from accent_analyzer.reports import FORMATS, write_report
 from accent_analyzer.targets import TARGETS, Status
@@ -302,6 +303,27 @@ def coach(history_path: str | None, accent: str | None, focus: str | None, limit
     click.echo(f"Coaching plan for {latest.label} ({latest.recorded_at:%Y-%m-%d}), "
                f"accent: {accent or 'not set (use --accent)'}")
     _print_coaching(recs, detailed=True)
+
+
+@cli.command()
+@HISTORY_OPTION
+@click.option("--output", "-o", type=click.Path(dir_okay=False), default="accent_dashboard.html",
+              show_default=True, help="Where to write the dashboard HTML.")
+@click.option("--open", "open_browser", is_flag=True, help="Open the dashboard in your browser.")
+def dashboard(history_path: str | None, output: str, open_browser: bool) -> None:
+    """Interactive dashboard across every recording in the history."""
+    if not history_path:
+        raise click.UsageError("Give --history PATH or set ACCENT_HISTORY.")
+    if not Path(history_path).expanduser().exists():
+        raise click.ClickException(f"No history file at {history_path}")
+    with HistoryStore(history_path) as store:
+        records = store.all()
+    written = write_dashboard(records, output)
+    click.echo(f"Dashboard written: {written} ({len(records)} recordings)")
+    if open_browser:
+        import webbrowser
+
+        webbrowser.open(written.resolve().as_uri())
 
 
 if __name__ == "__main__":
