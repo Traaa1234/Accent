@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import pathlib
 import socket
 import subprocess
 import threading
@@ -358,6 +359,25 @@ def test_codespace_address_reaches_app(client, monkeypatch):
     # Writes still need the app header, even from the codespace address.
     assert client.put("/api/settings", headers={"Host": host}, json={"accent": "nze"}).status_code == 403
     assert client.put("/api/settings", headers={"Host": host, **H}, json={"accent": "nze"}).status_code == 200
+
+
+def test_data_dir_from_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("ACCENT_DATA_DIR", str(tmp_path / "persist"))
+    monkeypatch.delenv("ACCENT_HISTORY", raising=False)
+    app = create_app()
+    assert app.config["PATHS"].data == tmp_path / "persist"
+    assert app.config["PATHS"].history == tmp_path / "persist" / "history.db"
+
+
+def test_start_script_migrates_old_data(tmp_path):
+    home, data = tmp_path / "home", tmp_path / "persist"
+    (home / ".accent_analyzer").mkdir(parents=True)
+    (home / ".accent_analyzer" / "history.db").write_text("x")
+    script = (pathlib.Path(__file__).parents[1] / ".devcontainer" / "start.sh").read_text()
+    snippet = script.split("# Keep recordings")[1].split("\nif ! command")[0]
+    out = subprocess.run(["bash", "-c", "# Keep recordings" + snippet], capture_output=True, text=True,
+                         env={**os.environ, "HOME": str(home), "ACCENT_DATA_DIR": str(data)})
+    assert (data / "history.db").read_text() == "x" and "Moved your recordings" in out.stdout
 
 
 def test_public_url():

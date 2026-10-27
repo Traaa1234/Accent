@@ -4,6 +4,8 @@
   "name": "Accent Coach",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
   "hostRequirements": { "cpus": 2 },
+  // /workspaces survives "Rebuild Container"; the home folder does not.
+  "containerEnv": { "ACCENT_DATA_DIR": "/workspaces/accent-data" },
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "postAttachCommand": "bash .devcontainer/start.sh",
   "forwardPorts": [8765],

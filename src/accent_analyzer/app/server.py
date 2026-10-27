@@ -95,7 +95,7 @@ def _ext_for(upload) -> str | None:
 
 
 def create_app(data_dir: str | Path | None = None, history_path: str | Path | None = None) -> Flask:
-    data_dir = Path(data_dir or DEFAULT_DATA_DIR).expanduser()
+    data_dir = Path(data_dir or os.environ.get("ACCENT_DATA_DIR") or DEFAULT_DATA_DIR).expanduser()
     history = Path(history_path or os.environ.get("ACCENT_HISTORY") or data_dir / "history.db").expanduser()
     paths = Paths(data_dir, history)
     static = resources.files("accent_analyzer.app").joinpath("static")
