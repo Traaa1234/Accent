@@ -44,16 +44,29 @@ def find_free_server(app, port: int, attempts: int = 10):
     raise OSError(f"No free port between {port} and {port + attempts - 1}")
 
 
+def public_url(port: int, env=os.environ) -> str:
+    """The address to open in a browser. In GitHub Codespaces the app runs on GitHub's
+    machine, so "localhost" would point at the viewer's own computer instead."""
+    name, domain = env.get("CODESPACE_NAME"), env.get("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
+    if name and domain:
+        return f"https://{name}-{port}.{domain}/"
+    return f"http://localhost:{port}/"
+
+
 def serve(app, port: int = DEFAULT_PORT, open_browser: bool = True, echo=print) -> None:
     if not port_free(port) and running_instance(port):
-        url = f"http://localhost:{port}/"
-        echo(f"Accent Coach is already running at {url}; opening it.")
+        url = public_url(port)
+        echo(f"Accent Coach is already running. Open {url}")
         if open_browser:
             webbrowser.open(url)
         return
     server, port = find_free_server(app, port)
-    url = f"http://localhost:{port}/"
-    echo(f"Accent Coach is running at {url}")
+    url = public_url(port)
+    if url.startswith("https://"):
+        echo(f"Accent Coach is running. Open this address in your browser:\n\n    {url}\n")
+        echo("(Or: Ports tab -> hover port %d -> globe icon. 'localhost' links won't work here.)" % port)
+    else:
+        echo(f"Accent Coach is running at {url}")
     echo("Keep this window open while you use the app. Close it (or press Ctrl+C) to stop.")
     if open_browser:
         threading.Timer(0.6, webbrowser.open, args=(url,)).start()

@@ -360,6 +360,12 @@ def test_codespace_address_reaches_app(client, monkeypatch):
     assert client.put("/api/settings", headers={"Host": host, **H}, json={"accent": "nze"}).status_code == 200
 
 
+def test_public_url():
+    from accent_analyzer.app.launcher import public_url
+    assert public_url(8765, {}) == "http://localhost:8765/"
+    assert public_url(8765, CODESPACE_ENV) == "https://fluffy-space-abc123-8765.app.github.dev/"
+
+
 def test_devcontainer_config():
     import pathlib
     import re as _re
