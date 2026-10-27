@@ -1,5 +1,7 @@
 # accent-analyzer
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Traaa1234/Accent)
+
 Acoustic analysis and coaching for speakers (NZE, AuE, British, Indian English, ...)
 training toward a General American accent. It measures intonation (pitch register,
 range, phrase-final rises/falls, phrase onsets) and maps off-target metrics to
@@ -12,8 +14,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
 ## Run it on GitHub (no install)
 
-1. On the repo page, click **Code → Codespaces → Create codespace on
-   `claude/lucid-planck-hf04ep`**.
+1. Click the **Open in GitHub Codespaces** button at the top of this page, then
+   **Create codespace** (any GitHub account works; it's free within GitHub's monthly
+   allowance). Or use **Code → Codespaces → Create codespace** on the repo page.
 2. Wait 2–3 minutes the first time while it installs ffmpeg and the tool. The app then
    starts by itself and opens in a new tab (if not, open the **Ports** panel and click
    the globe next to *Accent Coach*, port 8765).
