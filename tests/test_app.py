@@ -366,5 +366,10 @@ def test_devcontainer_config():
     text = (pathlib.Path(__file__).parents[1] / ".devcontainer" / "devcontainer.json").read_text()
     cfg = json.loads(_re.sub(r"^\s*//.*$", "", text, flags=_re.M))  # JSONC: strip line comments
     assert cfg["forwardPorts"] == [8765]
-    assert "ffmpeg" in cfg["postCreateCommand"]
-    assert "accent-analyzer app --no-browser" in cfg["postAttachCommand"]
+    root = pathlib.Path(__file__).parents[1]
+    for key, script in (("postCreateCommand", "setup.sh"), ("postAttachCommand", "start.sh")):
+        assert cfg[key] == f"bash .devcontainer/{script}"
+        assert (root / ".devcontainer" / script).is_file()
+    setup = (root / ".devcontainer" / "setup.sh").read_text()
+    assert "yarn.list" in setup and "ffmpeg" in setup and "uv sync" in setup
+    assert "accent-analyzer app --no-browser" in (root / ".devcontainer" / "start.sh").read_text()

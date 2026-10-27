@@ -10,10 +10,11 @@
    click the **globe icon** (Open in Browser).
 3. In the app, allow the microphone when asked.
 
-**Nothing running?** Type this in the terminal and press Enter:
+**Nothing running?** Type this in the terminal and press Enter (it finishes any
+incomplete setup, then starts the app):
 
 ```
-python -m uv run accent-analyzer app --no-browser
+bash .devcontainer/start.sh
 ```
 
 Keep this codespace open while you practice; you can close this file.
