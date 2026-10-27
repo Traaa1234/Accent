@@ -10,6 +10,20 @@ and a daily drill tracker. Next on the roadmap: phonetic feature detection
 (T-flaps, dark /l/, rhoticity, vowels) via forced alignment.
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
+## Run it on GitHub (no install)
+
+1. On the repo page, click **Code → Codespaces → Create codespace on
+   `claude/lucid-planck-hf04ep`**.
+2. Wait 2–3 minutes the first time while it installs ffmpeg and the tool. The app then
+   starts by itself and opens in a new tab (if not, open the **Ports** panel and click
+   the globe next to *Accent Coach*, port 8765).
+3. Use it like the local app. Allow the microphone when the browser asks.
+
+Your recordings and history live inside the codespace, which is private to you.
+GitHub stops an idle codespace after 30 minutes (reopen it from **Code → Codespaces**)
+and deletes stopped ones after 30 days of disuse, so download PDF reports of anything
+you want to keep. Codespaces usage counts against your GitHub plan's free monthly hours.
+
 ## Quick start: the app
 
 Needs [uv](https://docs.astral.sh/uv/), `ffmpeg` and `git` on your PATH.
