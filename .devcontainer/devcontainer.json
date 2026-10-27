@@ -11,6 +11,6 @@
     "8765": { "label": "Accent Coach", "onAutoForward": "openBrowser" }
   },
   "customizations": {
-    "codespaces": { "openFiles": ["README.md"] }
+    "codespaces": { "openFiles": [".devcontainer/START_HERE.md"] }
   }
 }
