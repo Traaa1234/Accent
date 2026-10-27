@@ -58,7 +58,12 @@ def _frame(samples: np.ndarray, frame_len: int, hop_len: int) -> np.ndarray:
     if len(samples) < frame_len:
         samples = np.pad(samples, (0, frame_len - len(samples)))
     n_frames = 1 + (len(samples) - frame_len) // hop_len
-    return np.lib.stride_tricks.sliding_window_view(samples, frame_len)[::hop_len][:n_frames]
+    # Strided view with the hop built in. (sliding_window_view(...)[::hop] first creates a
+    # view of every 1-sample shift, whose nominal size overflows 32-bit memory in the browser.)
+    samples = np.ascontiguousarray(samples)
+    step = samples.strides[0]
+    return np.lib.stride_tricks.as_strided(samples, shape=(n_frames, frame_len),
+                                           strides=(hop_len * step, step), writeable=False)
 
 
 def _parabolic_offset(y_prev: np.ndarray, y0: np.ndarray, y_next: np.ndarray) -> np.ndarray:

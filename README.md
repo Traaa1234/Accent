@@ -12,7 +12,26 @@ and a daily drill tracker. Next on the roadmap: phonetic feature detection
 (T-flaps, dark /l/, rhoticity, vowels) via forced alignment.
 See [docs/PLAN.md](docs/PLAN.md) for the roadmap.
 
-## Run it on GitHub (no install)
+## Easiest: open the website
+
+**https://traaa1234.github.io/Accent/** — nothing to install, works on a computer or phone
+(recent Chrome, Edge, Firefox or Safari). Share the link with anyone.
+
+* The first visit downloads the analysis engine (about 30 MB) and takes 20–60 seconds;
+  later visits are faster. Allow the microphone when asked.
+* Everything runs inside your own browser: recordings are never uploaded, and each
+  person's history stays on their own device and browser.
+* That also means clearing the site's data, or a private window, erases it. Use
+  **Settings → Download backup** now and then (restore it in any browser).
+* The website has everything except the HTML/PDF report downloads and the pYIN pitch
+  tracker; use the local app or a codespace for those.
+
+The site is rebuilt by [`.github/workflows/pages.yml`](.github/workflows/pages.yml) on
+every push. One-time setup for the repo owner: **Settings → Pages → Build and deployment
+→ Source: GitHub Actions**. To build it yourself: `uv run python scripts/build_web.py site`
+and serve the `site/` folder over HTTP.
+
+## Run it on GitHub Codespaces (full version, no install)
 
 1. Click the **Open in GitHub Codespaces** button at the top of this page, then
    **Create codespace** (any GitHub account works; it's free within GitHub's monthly

@@ -51,7 +51,23 @@ re-run DSP.
 6. **Dashboard** — done. HRT/falls trajectory, mean-F0 bars, radar vs best-ever, sortable table.
 7. **App** — done. Record / Results / Progress / Practice / Settings in the browser.
 8. **Shadowing, A/B contrast, daily drill tracker** — done (app tabs + CLI commands).
-9. **Later**: shadowing (DTW-aligned contour correlation), A/B mode, daily drill tracker.
+9. **Website** — done. The same front end and Python code in the browser (Pyodide), on GitHub Pages.
+
+## Browser version (GitHub Pages)
+
+`scripts/build_web.py` builds a static site: the app's own `index.html`/`app.js`, plus
+`web/platform.js`, which answers the front end's `/api/...` requests by passing them to
+`web/worker.js`. The worker runs Pyodide with numpy/scipy/sqlite3 and the unchanged Flask
+app via its test client (`accent_analyzer/web.py`), so both versions share every line of
+analysis and API code. Differences:
+
+* The browser decodes audio (`decodeAudioData`) and resamples to 16 kHz mono 16-bit WAV,
+  which `analysis/audio.py` reads with the standard library when ffmpeg isn't installed.
+* The data folder is Pyodide's IDBFS mount, synced to IndexedDB after every write.
+  Backup/restore zips it.
+* No HTML/PDF reports (matplotlib + reportlab would add ~20 MB) and no pYIN (librosa).
+  DTW for shadowing/A-B is plain numpy (`compare.align`) rather than librosa's.
+* `reports/` and `app/` import their heavy dependencies lazily so the browser never loads them.
 
 ## v2 phonetic features (not in v1)
 

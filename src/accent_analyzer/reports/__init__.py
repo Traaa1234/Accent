@@ -1,11 +1,37 @@
-"""Per-recording reports (HTML and PDF)."""
+"""Per-recording reports (HTML and PDF).
+
+Imports are lazy so that `accent_analyzer.reports.verdict` stays usable without
+matplotlib and reportlab (the browser version only needs the verdict text).
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from accent_analyzer.reports.html_report import render_html, write_html
-from accent_analyzer.reports.pdf_report import build_pdf, write_pdf
+
+def write_html(*args, **kwargs):
+    from accent_analyzer.reports.html_report import write_html as _write
+
+    return _write(*args, **kwargs)
+
+
+def write_pdf(*args, **kwargs):
+    from accent_analyzer.reports.pdf_report import write_pdf as _write
+
+    return _write(*args, **kwargs)
+
+
+def render_html(*args, **kwargs):
+    from accent_analyzer.reports.html_report import render_html as _render
+
+    return _render(*args, **kwargs)
+
+
+def build_pdf(*args, **kwargs):
+    from accent_analyzer.reports.pdf_report import build_pdf as _build
+
+    return _build(*args, **kwargs)
+
 
 FORMATS = {".html": write_html, ".htm": write_html, ".pdf": write_pdf}
 

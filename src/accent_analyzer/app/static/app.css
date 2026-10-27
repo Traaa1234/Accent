@@ -235,3 +235,13 @@ ol.routine .steps { color: var(--ink-2); margin: 4px 0; padding-left: 18px; }
   padding: 8px 16px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 30; }
 #toast.show { opacity: 1; }
 .empty { text-align: center; color: var(--ink-2); padding: 40px 16px; }
+
+/* browser-only version: engine loading banner (see web/platform.js) */
+.boot { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 14px;
+  background: var(--warn-bg); color: var(--ink); border-bottom: 1px solid var(--border); }
+.boot.failed { color: var(--bad); }
+.boot.failed .boot-spin { display: none; }
+.boot-spin { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--axis);
+  border-top-color: var(--primary); animation: boot-spin 0.9s linear infinite; }
+@keyframes boot-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .boot-spin { animation: none; } }

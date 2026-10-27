@@ -45,13 +45,33 @@ def _features(st: np.ndarray) -> np.ndarray:
     return np.vstack([centred, slope])
 
 
-def align(ref_st: np.ndarray, user_st: np.ndarray) -> np.ndarray:
-    """DTW warping path as an (n, 2) array of (ref_index, user_index), in time order."""
-    import librosa
+BAND = 0.3  # Sakoe-Chiba band: |i/n - j/m| may not exceed this fraction
 
-    _, wp = librosa.sequence.dtw(X=_features(ref_st), Y=_features(user_st), metric="euclidean",
-                                 global_constraints=True, band_rad=0.3)
-    return wp[::-1]
+
+def align(ref_st: np.ndarray, user_st: np.ndarray) -> np.ndarray:
+    """DTW warping path as an (n, 2) array of (ref_index, user_index), in time order.
+
+    Plain numpy (steps diagonal/down/right, unit weights, Euclidean cost), filled one
+    anti-diagonal at a time so it stays fast without compiled helpers.
+    """
+    x, y = _features(ref_st).T, _features(user_st).T
+    n, m = len(x), len(y)
+    cost = np.sqrt(((x[:, None, :] - y[None, :, :]) ** 2).sum(axis=2))
+    ii, jj = np.indices((n, m))
+    cost[np.abs(ii / max(n - 1, 1) - jj / max(m - 1, 1)) > BAND] = np.inf
+    acc = np.full((n + 1, m + 1), np.inf)  # padded by one row and column
+    acc[0, 0] = 0.0
+    for k in range(n + m - 1):
+        i = np.arange(max(0, k - m + 1), min(n - 1, k) + 1)
+        j = k - i
+        best = np.minimum(np.minimum(acc[i, j], acc[i, j + 1]), acc[i + 1, j])
+        acc[i + 1, j + 1] = cost[i, j] + best
+    i, j, path = n, m, [(n - 1, m - 1)]
+    while (i, j) != (1, 1):
+        steps = ((i - 1, j - 1), (i - 1, j), (i, j - 1))
+        i, j = min((s for s in steps if s[0] >= 1 and s[1] >= 1), key=lambda s: acc[s])
+        path.append((i - 1, j - 1))
+    return np.array(path[::-1])
 
 
 def _decimate(t: np.ndarray, st: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

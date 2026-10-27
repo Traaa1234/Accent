@@ -23,6 +23,7 @@ from flask import Flask, Response, abort, jsonify, request, send_file
 from accent_analyzer.analysis.audio import SUPPORTED_EXTENSIONS, AudioLoadError
 from accent_analyzer.analysis.compare import REFERENCE_F0, compare_takes, shadow
 from accent_analyzer.analysis.pipeline import analyze_file
+from accent_analyzer.app.common import DEFAULT_SETTINGS, MIN_SECONDS, VOICE_RANGES
 from accent_analyzer.app.payload import metrics_only_payload, result_payload
 from accent_analyzer.coaching import ACCENTS, load_library, recommend
 from accent_analyzer.coaching.library import ACCENT_NAMES
@@ -32,14 +33,7 @@ from accent_analyzer.history import HistoryStore, progression
 from accent_analyzer.reports import build_pdf, render_html
 
 DEFAULT_DATA_DIR = Path("~/.accent_analyzer")
-MIN_SECONDS = 3.0
 MAX_UPLOAD_MB = 200
-VOICE_RANGES = {
-    "low": {"label": "Low voice", "f0_min": 60.0, "f0_max": 250.0},
-    "medium": {"label": "Medium voice", "f0_min": 80.0, "f0_max": 320.0},
-    "high": {"label": "High voice", "f0_min": 120.0, "f0_max": 400.0},
-}
-DEFAULT_SETTINGS = {"accent": None, "voice": "medium", "pitch_method": "autocorr", "level": "intermediate"}
 KEEP_PRACTICE_FILES = 40
 MIME_EXT = {
     "audio/webm": ".webm", "audio/ogg": ".ogg", "audio/mp4": ".mp4", "audio/x-m4a": ".m4a",

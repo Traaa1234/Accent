@@ -70,3 +70,15 @@ def test_corrupt_file(tmp_path):
     bad.write_bytes(b"not really audio")
     with pytest.raises(AudioLoadError, match="ffmpeg"):
         load_audio(bad)
+
+
+def test_read_wav_matches_ffmpeg_without_it(tmp_path):
+    """The browser build has no ffmpeg and decodes 16-bit WAV with the standard library."""
+    from accent_analyzer.analysis.audio import decode, read_wav
+
+    src = tmp_path / "in.wav"
+    _stereo_44k(src)
+    ours, ref = read_wav(src), decode(src)
+    assert abs(len(ours) - len(ref)) <= 2
+    n = min(len(ours), len(ref))
+    assert np.corrcoef(ours[:n], ref[:n])[0, 1] > 0.99

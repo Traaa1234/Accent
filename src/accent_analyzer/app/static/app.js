@@ -3,6 +3,13 @@
 
 const SVGNS = "http://www.w3.org/2000/svg";
 const view = document.getElementById("view");
+/* The local server answers /api/... over HTTP. The browser-only version (GitHub Pages)
+   loads platform.js first, which answers the same paths from Python running in the page. */
+const P = window.AccentPlatform || {
+  kind: "server", features: { reports: true, pyin: true },
+  fetch: (path, init) => fetch(path, init),
+  media: async url => url,
+};
 const state = { app: null, prompts: null, promptMode: "passage", passage: 0, topic: 0, drill: null };
 
 /* ---------- small helpers ---------- */
@@ -59,10 +66,13 @@ async function api(path, opts = {}) {
   if (init.method !== "GET") init.headers["X-Accent-App"] = "1";
   if (opts.json) { init.headers["Content-Type"] = "application/json"; init.body = JSON.stringify(opts.json); }
   if (opts.form) init.body = opts.form;
-  const res = await fetch(path, init);
+  const res = await P.fetch(path, init);
   const data = res.headers.get("content-type")?.includes("json") ? await res.json() : null;
   if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
   return data;
+}
+function setMedia(audio, url) {
+  P.media(url).then(src => { audio.src = src; }).catch(() => toast("Couldn't load that audio"));
 }
 async function refreshState() { state.app = await api("/api/state"); return state.app; }
 
@@ -347,8 +357,10 @@ async function viewResults(id) {
     return;
   }
   const actions = h("div", "row", view); actions.style.marginTop = "10px";
-  const full = h("a", "btn", actions, "Full report"); full.href = `/api/recordings/${rid}/report.html`; full.target = "_blank"; full.rel = "noopener";
-  const pdf = h("a", "btn", actions, "Download PDF"); pdf.href = `/api/recordings/${rid}/report.pdf`;
+  if (P.features.reports) {
+    const full = h("a", "btn", actions, "Full report"); full.href = `/api/recordings/${rid}/report.html`; full.target = "_blank"; full.rel = "noopener";
+    const pdf = h("a", "btn", actions, "Download PDF"); pdf.href = `/api/recordings/${rid}/report.pdf`;
+  }
   h("span", "spacer", actions);
   button("Delete take", "danger", actions, async () => {
     if (!confirm("Delete this take and its audio? This can't be undone.")) return;
@@ -387,7 +399,7 @@ async function viewResults(id) {
   const l3 = h("span", "", leg); h("span", "mk falling", l3, "▼"); l3.append("falling end");
   const chartBox = h("div", "chart", cc);
   const audio = h("audio", "", cc);
-  audio.controls = true; audio.preload = "metadata"; audio.src = `/api/recordings/${rid}/audio`;
+  audio.controls = true; audio.preload = "metadata"; setMedia(audio, `/api/recordings/${rid}/audio`);
   const chips = h("div", "ends", cc);
   const player = phrasePlayer(audio);
   const drawContour = () => contourChart(chartBox, r, player);
@@ -584,7 +596,9 @@ async function viewProgress() {
   }
   const f = h("iframe", "frame", view);
   f.title = "Progress dashboard";
-  f.src = "/dashboard?ts=" + Date.now();
+  if (P.kind === "server") { f.src = "/dashboard?ts=" + Date.now(); return; }
+  const res = await P.fetch("/dashboard", { method: "GET", headers: {} });
+  f.srcdoc = await res.text();
 }
 
 /* =====================================================================
@@ -813,7 +827,7 @@ async function practiceShadow(body) {
   const setRef = () => {
     state.shadowRef = sel.value;
     refAudio.hidden = !sel.value; del.disabled = !sel.value;
-    if (sel.value) refAudio.src = `/api/references/${sel.value}/audio`;
+    if (sel.value) setMedia(refAudio, `/api/references/${sel.value}/audio`);
     const r = refs.find(x => x.id === sel.value);
     refStatus.textContent = r?.warning || "";
   };
@@ -944,7 +958,7 @@ function renderAB(out, r) {
     h("div", "label", t, "Take " + id + (r.winner === id ? " ✓" : ""));
     h("div", "value", t, Math.round(p.score * 100) + "/100");
     h("div", "small muted", t, `ends ${p.final_direction ?? "?"}${p.final_semitones != null ? ` (${p.final_semitones > 0 ? "+" : ""}${p.final_semitones} st)` : ""} · range ${p.span?.toFixed?.(1) ?? "?"} st`);
-    const a = h("audio", "", t); a.controls = true; a.src = id === "A" ? r.audio_a : r.audio_b;
+    const a = h("audio", "", t); a.controls = true; setMedia(a, id === "A" ? r.audio_a : r.audio_b);
   }
   legendRow(out, [["ref", "Take A"], ["you", "Take B (time-aligned)"]]);
   const chart = h("div", "chart", out);
@@ -1047,10 +1061,11 @@ async function viewSettings() {
   group("Voice range", "Sets the pitch range the tracker searches. If the pitch chart shows stray dots at the top or bottom, try another range.",
     "voice", app.voices.map(v => ({ id: v.id, label: v.label, hint: `${v.f0_min}–${v.f0_max} Hz` })),
     s.voice, v => save({ voice: v }));
-  group("Pitch tracker", null, "pitch_method", [
+  if (P.features.pyin) group("Pitch tracker", null, "pitch_method", [
     { id: "autocorr", label: "Standard", hint: "Fast. Good for most voices." },
     { id: "yin", label: "Precise (pYIN)", hint: "Slower, fewer octave jumps. Try it if results look odd." },
   ], s.pitch_method, v => save({ pitch_method: v }));
+  if (P.dataCard) { P.dataCard(view, { h, button, toast, refreshState }); return; }
   const info = h("section", "card", view);
   h("h2", "", info, "Where your data lives");
   h("p", "muted small", info, "Everything stays on this computer.");
