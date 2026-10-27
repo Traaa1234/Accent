@@ -327,3 +327,44 @@ def test_routine_endpoints(client, nze_wav):
     assert done == {"done": True, "streak": 1}
     after = client.get("/api/routine").get_json()
     assert after["done_today"] and after["routine"]["focus"]["id"] == "hrt"
+
+
+# --- GitHub Codespaces --------------------------------------------------------------
+
+CODESPACE_ENV = {"CODESPACE_NAME": "fluffy-space-abc123", "GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN": "app.github.dev"}
+
+
+@pytest.mark.parametrize("hostname,env,ok", [
+    ("localhost", {}, True),
+    ("fluffy-space-abc123-8765.app.github.dev", {}, False),  # not in a codespace
+    ("fluffy-space-abc123-8765.app.github.dev", CODESPACE_ENV, True),
+    ("fluffy-space-abc123-8766.app.github.dev", CODESPACE_ENV, True),  # fallback port
+    ("other-space-8765.app.github.dev", CODESPACE_ENV, False),  # someone else's codespace
+    ("fluffy-space-abc123-8765.app.github.dev.evil.com", CODESPACE_ENV, False),
+    ("evil.com", CODESPACE_ENV, False),
+    (None, CODESPACE_ENV, False),
+])
+def test_host_allowed(hostname, env, ok):
+    from accent_analyzer.app.server import host_allowed
+    assert host_allowed(hostname, env) is ok
+
+
+def test_codespace_address_reaches_app(client, monkeypatch):
+    host = "fluffy-space-abc123-8765.app.github.dev"
+    assert client.get("/api/state", headers={"Host": host}).status_code == 403
+    for k, v in CODESPACE_ENV.items():
+        monkeypatch.setenv(k, v)
+    assert client.get("/api/state", headers={"Host": host}).status_code == 200
+    # Writes still need the app header, even from the codespace address.
+    assert client.put("/api/settings", headers={"Host": host}, json={"accent": "nze"}).status_code == 403
+    assert client.put("/api/settings", headers={"Host": host, **H}, json={"accent": "nze"}).status_code == 200
+
+
+def test_devcontainer_config():
+    import pathlib
+    import re as _re
+    text = (pathlib.Path(__file__).parents[1] / ".devcontainer" / "devcontainer.json").read_text()
+    cfg = json.loads(_re.sub(r"^\s*//.*$", "", text, flags=_re.M))  # JSONC: strip line comments
+    assert cfg["forwardPorts"] == [8765]
+    assert "ffmpeg" in cfg["postCreateCommand"]
+    assert "accent-analyzer app --no-browser" in cfg["postAttachCommand"]

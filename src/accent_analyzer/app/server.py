@@ -52,6 +52,19 @@ LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 APP_HEADER = "X-Accent-App"
 
 
+def host_allowed(hostname: str | None, env=os.environ) -> bool:
+    """Local addresses, plus this codespace's own forwarded address when running in
+    GitHub Codespaces (e.g. "<codespace>-8765.app.github.dev"). Codespaces puts its
+    own GitHub sign-in in front of that address; any other host is refused, which
+    blocks DNS-rebinding attacks."""
+    if hostname in LOCAL_HOSTS:
+        return True
+    name, domain = env.get("CODESPACE_NAME"), env.get("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
+    if hostname and name and domain:
+        return re.fullmatch(rf"{re.escape(name)}-\d+\.{re.escape(domain)}", hostname) is not None
+    return False
+
+
 class Paths:
     def __init__(self, data_dir: Path, history: Path):
         self.data = data_dir
@@ -153,7 +166,7 @@ def create_app(data_dir: str | Path | None = None, history_path: str | Path | No
     # ---- security: local origin only, and a custom header on anything that writes --
     @app.before_request
     def guard():
-        if urlsplit("//" + request.host).hostname not in LOCAL_HOSTS:
+        if not host_allowed(urlsplit("//" + request.host).hostname):
             abort(403)
         if request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get(APP_HEADER) != "1":
             abort(403)
